@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from configurations import Configuration
@@ -16,6 +17,7 @@ class Base(Configuration):
             "django.contrib.auth",
             "django.contrib.contenttypes",
             "django.contrib.messages",
+            "django.contrib.staticfiles",
             "django.contrib.sessions",
             "django_extensions",
             "django_linear_migrations",
@@ -98,6 +100,17 @@ class Base(Configuration):
             },
         }
     ]
+
+    @property
+    def STATIC_ROOT(self) -> str:
+        default_value = os.path.join(self.BASE_DIR, "public/static")
+        return values.Value(default=default_value, environ_name="STATIC_ROOT")
+
+    @property
+    def STATIC_URL(self) -> str:
+        value = values.Value("/static/", environ_name="STATIC_URL")
+        value = value.strip("/")
+        return "/" + value + "/"
 
     REST_FRAMEWORK = {
         "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],

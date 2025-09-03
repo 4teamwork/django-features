@@ -1,0 +1,10 @@
+# The "static" folder contains the assets collected with the
+# Django management command "collectstatic".
+# These files must be ignored, as they are specific to each
+# deployment.
+
+# Ignore everything:
+*
+
+# Except this file:
+!.gitignore
