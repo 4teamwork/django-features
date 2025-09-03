@@ -1,0 +1,89 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-features\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2025-09-3 11:46+0100\n"
+"Last-Translator: Joel Christinet <joel.christinet@fabasoft.com>\n"
+"Language-Team: Fabasoft Schweiz AG\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: app/settings/base.py
+msgid "Deutsch"
+msgstr ""
+
+#: app/settings/base.py
+msgid "Englisch"
+msgstr ""
+
+#: app/settings/base.py
+msgid "Französisch"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Name"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Icon"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Icon Name von mdi ohne mdi-Prefix mit Bindestrich getrennt"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Systemmeldungstyp"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Systemmeldungstypen"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Hintergrundfarbe"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Beginn"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Ende"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Reihenfolge"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Nachricht"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Textfarbe"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Titel"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Typ"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Systemmeldung"
+msgstr ""
+
+#: django_features/system_message/models.py
+msgid "Systemmeldungen"
+msgstr ""
