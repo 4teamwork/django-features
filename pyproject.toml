@@ -8,14 +8,29 @@ packages = [{include = "django_features"}]
 
 [tool.poetry.dependencies]
 python = ">=3.12, <4"
+django-click = "^2"
+django-configurations = "^2"
+django-constance = "^4"
+django-extensions = "^4"
+django-filter = "^25"
+django-linear-migrations = "^2"
+django-modeltranslation = "^0.19"
 djangorestframework = "^3"
 django = "^4.2"
+python-dotenv = "^1"
+pytz = "^2025.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
 isort = "^6.0.1"
+factory-boy = "^3.3.3"
 flake8 = "7.3.0"
+freezegun = "^1.5.5"
 mypy = "^1.17.1"
+pluck = "^0.2"
+psycopg2 = "^2.9.10"
+pytest = "^8.4.1"
+pytest-django = "^4.11.1"
 towncrier = "^25.8.0"
 zest-releaser = "^9.6.2"
 zestreleaser-towncrier = "^1.3.0"
@@ -39,7 +54,7 @@ exclude = '''
 force_alphabetical_sort_within_sections = true
 force_single_line = true
 from_first = false
-known_first_party = "django_features"
+known_first_party = "app,django_features"
 lines_after_imports = 2
 skip_glob = ".venv,.eggs"
 
