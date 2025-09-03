@@ -81,8 +81,6 @@ name = "Other changes:"
 showcontent = true
 
 [tool.mypy]
-files = ["ris/cobra/", "ris/cmi/", "ris/models/meeting.py", "ris/web", "ris/verbalix"]
-exclude = ["tests/", "migrations/"]
 follow_imports = "skip"
 strict = true
 ignore_missing_imports = true
