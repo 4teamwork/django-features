@@ -3,6 +3,19 @@ A collection of fearures used in our Django-based web applications
 
 [Changelog](CHANGELOG.md)
 
+## Installation
+
+``` bash
+pip install ftw-django-features
+```
+
+## Usage
+
+Add desired app to `INSTALLED_APPS` in your Django project.
+
+Available apps:
+- `django_features.system_message`
+
 ## Development
 
 Installing dependencies, assuming you have poetry installed:
