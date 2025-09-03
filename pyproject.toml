@@ -91,3 +91,10 @@ disallow_any_unimported = false
 disallow_subclassing_any = false
 disallow_untyped_decorators = false
 disallow_any_generics = false
+
+[tool.pytest.ini_options]
+addopts = "--nomigrations"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = "app"
+DJANGO_SETTINGS_MODULE= "app.settings"
+DJANGO_CONFIGURATION= "Development"
