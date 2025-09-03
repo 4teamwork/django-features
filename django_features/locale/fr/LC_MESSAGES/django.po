@@ -1,0 +1,89 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-features\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2025-09-3 11:46+0100\n"
+"Last-Translator: Joel Christinet <joel.christinet@fabasoft.com>\n"
+"Language-Team: Fabasoft Schweiz AG\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: app/settings/base.py
+msgid "Deutsch"
+msgstr "Allemand"
+
+#: app/settings/base.py
+msgid "Englisch"
+msgstr "Anglais"
+
+#: app/settings/base.py
+msgid "Französisch"
+msgstr "Français"
+
+#: django_features/system_message/models.py
+msgid "Name"
+msgstr "Nom"
+
+#: django_features/system_message/models.py
+msgid "Icon"
+msgstr "Icône"
+
+#: django_features/system_message/models.py
+msgid "Icon Name von mdi ohne mdi-Prefix mit Bindestrich getrennt"
+msgstr "Nom de l'icône mdi sans préfixe mdi, séparé par un tiret"
+
+#: django_features/system_message/models.py
+msgid "Systemmeldungstyp"
+msgstr "Type de message système"
+
+#: django_features/system_message/models.py
+msgid "Systemmeldungstypen"
+msgstr "Types de message système"
+
+#: django_features/system_message/models.py
+msgid "Hintergrundfarbe"
+msgstr "Couleur de fond"
+
+#: django_features/system_message/models.py
+msgid "Beginn"
+msgstr "Début"
+
+#: django_features/system_message/models.py
+msgid "Ende"
+msgstr "Fin"
+
+#: django_features/system_message/models.py
+msgid "Reihenfolge"
+msgstr "Ordre"
+
+#: django_features/system_message/models.py
+msgid "Nachricht"
+msgstr "Message"
+
+#: django_features/system_message/models.py
+msgid "Textfarbe"
+msgstr "Couleur du texte"
+
+#: django_features/system_message/models.py
+msgid "Titel"
+msgstr "Titre"
+
+#: django_features/system_message/models.py
+msgid "Typ"
+msgstr "Type"
+
+#: django_features/system_message/models.py
+msgid "Systemmeldung"
+msgstr "Message système"
+
+#: django_features/system_message/models.py
+msgid "Systemmeldungen"
+msgstr "Messages système"

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+python manage.py makemessages --all --no-wrap --add-location file --ignore venv --ignore lib
+if [[ `uname` == "Darwin" ]]; then
+   sed -i '' '/"POT-Creation-Date.*/d' django_features/locale/**/LC_MESSAGES/django.po
+else
+   sed -i '/"POT-Creation-Date.*/d' django_features/locale/**/LC_MESSAGES/django.po
+fi
+python manage.py compilemessages --ignore venv --ignore lib
