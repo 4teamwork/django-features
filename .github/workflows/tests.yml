@@ -10,6 +10,19 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: django_features_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -22,10 +35,12 @@ jobs:
         with:
           poetry-version: 2.1
       - name: Install dependencies
-        run: poetry install --only=dev
+        run: poetry install
       - name: isort
         run: poetry run isort --check-only --quiet --settings pyproject.toml .
       - name: flake8
         run: poetry run flake8
       - name: black
         run: poetry run black --check --config pyproject.toml .
+      - name: test
+        run: DJANGO_CONFIGURATION=Testing poetry run pytest
