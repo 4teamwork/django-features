@@ -1,3 +1,4 @@
+from constance import config
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 from django.utils.safestring import SafeString
@@ -6,8 +7,13 @@ from django_features.system_message import forms
 from django_features.system_message import models
 
 
+class SystemMessageBaseAdmin(admin.ModelAdmin):
+    def has_module_permission(self, request):
+        return config.ENABLE_SYSTEM_MESSAGE
+
+
 @admin.register(models.SystemMessageType)
-class SystemInfoTypeAdmin(admin.ModelAdmin):
+class SystemInfoTypeAdmin(SystemMessageBaseAdmin):
     list_display = (
         "id",
         "name",
@@ -22,7 +28,7 @@ class SystemInfoTypeAdmin(admin.ModelAdmin):
 
 
 @admin.register(models.SystemMessage)
-class SystemInfoAdmin(admin.ModelAdmin):
+class SystemInfoAdmin(SystemMessageBaseAdmin):
     form = forms.SystemMessageAdminForm
     list_display = (
         "id",
