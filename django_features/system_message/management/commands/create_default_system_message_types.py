@@ -10,15 +10,15 @@ from django_features.system_message import models
 
 DEFAULT_SYSTEM_MESSAGE_TYPES = [
     {
-        "name": "1",
+        "name": "Info",
         "icon": "information",
     },
     {
-        "name": "2",
+        "name": "Warning",
         "icon": "alert",
     },
     {
-        "name": "3",
+        "name": "Error",
         "icon": "alert-octagon",
     },
 ]
