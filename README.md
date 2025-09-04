@@ -14,7 +14,36 @@ pip install ftw-django-features
 Add desired app to `INSTALLED_APPS` in your Django project.
 
 Available apps:
-- `django_features.system_message`
+```
+django_features.system_message
+```
+
+### System Message
+
+If you want to use `django_features.system_message`, your base configuration class should inherit from `django_features.system_message.settings.SystemMessageConfigurationMixin`.
+
+Then call the super property:
+
+```
+@property
+def CONSTANCE_CONFIG(self) -> dict:
+    config = super().CONSTANCE_CONFIG
+    return {**config, ...}
+
+@property
+def CONSTANCE_CONFIG_FIELDSETS(self) -> dict:
+    config = super().CONSTANCE_CONFIG_FIELDSETS
+    return {
+        **config,
+        ...
+    }
+```
+
+Add the `django_features.system_message.routers.system_message_router` to your `ROOT_URLCONF`. For example:
+
+```
+path("api/", include(system_message_router.urls)),
+```
 
 ## Development
 

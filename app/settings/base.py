@@ -5,8 +5,10 @@ from configurations import Configuration
 from configurations import values
 from django.utils.translation import gettext_lazy as _
 
+from django_features.system_message.settings import SystemMessageConfigurationMixin
 
-class Base(Configuration):
+
+class Base(Configuration, SystemMessageConfigurationMixin):
     DEBUG = False
 
     @property
@@ -124,20 +126,16 @@ class Base(Configuration):
 
     @property
     def CONSTANCE_CONFIG(self) -> dict:
-        return {
-            "SYSTEM_MESSAGE_PERMISSION": (
-                "",
-                "Django permission to manage system messages.",
-                str,
-            ),
-            "ENABLE_SYSTEM_MESSAGE": (False, "Enables the system info feature.", bool),
-        }
+        config = super().CONSTANCE_CONFIG
+        return {**config, "TEST": (False, "Test add addidional constances", bool)}
 
     @property
     def CONSTANCE_CONFIG_FIELDSETS(self) -> dict:
+        config = super().CONSTANCE_CONFIG_FIELDSETS
         return {
+            **config,
             "Miscellaneous": {
-                "fields": ("ENABLE_SYSTEM_MESSAGE", "SYSTEM_MESSAGE_PERMISSION"),
+                "fields": ("TEST",),
                 "collapse": True,
             },
         }
