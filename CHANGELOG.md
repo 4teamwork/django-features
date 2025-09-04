@@ -1,4 +1,12 @@
 
+2025.1.2 (2025-09-04)
+---------------------
+
+Other changes:
+
+- Use BigAutoField as auto field. (`TI-2887 <https://4teamwork.atlassian.net/browse/TI-2887>`_)
+
+
 2025.1.1 (2025-09-04)
 ---------------------
 
