@@ -1,4 +1,12 @@
 
+2025.2.0 (2025-09-09)
+---------------------
+
+Bug fixes:
+
+- Make the dismiss endpoint more flexible by adding optional args and kwargs params. (`TI-2887 <https://4teamwork.atlassian.net/browse/TI-2887>`_)
+
+
 2025.1.2 (2025-09-04)
 ---------------------
 
