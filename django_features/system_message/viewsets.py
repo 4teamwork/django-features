@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.db.models import Q
 from django.db.models import QuerySet
 from django.utils import timezone
@@ -68,6 +70,6 @@ class SystemMessageViewSet(ModelViewSet):
     serializer_class = serializers.SystemMessageSerializer
 
     @action(methods=["patch"], detail=True)
-    def dismiss(self, request: Request, pk: int) -> Response:
+    def dismiss(self, request: Request, pk: int, *args: Any, **kwargs: Any) -> Response:
         self.get_object().dismissed_users.add(self.request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
