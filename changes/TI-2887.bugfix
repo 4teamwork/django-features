@@ -1,0 +1,1 @@
+Make the dismiss endpoint more flexible by adding optional args and kwargs params. (`TI-2887 <https://4teamwork.atlassian.net/browse/TI-2887>`_)
