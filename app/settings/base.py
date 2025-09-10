@@ -1,14 +1,14 @@
 import os
 from pathlib import Path
 
-from configurations import Configuration
 from configurations import values
 from django.utils.translation import gettext_lazy as _
 
+from django_features.settings import BaseConfiguration
 from django_features.system_message.settings import SystemMessageConfigurationMixin
 
 
-class Base(Configuration, SystemMessageConfigurationMixin):
+class Base(BaseConfiguration, SystemMessageConfigurationMixin):
     DEBUG = False
 
     @property
