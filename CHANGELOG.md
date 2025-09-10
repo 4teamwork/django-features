@@ -1,4 +1,12 @@
 
+2025.3.0 (2025-09-10)
+---------------------
+
+New features:
+
+- The page and page size query params are now configurable. (`TI-2887 <https://4teamwork.atlassian.net/browse/TI-2887>`_)
+
+
 2025.2.0 (2025-09-09)
 ---------------------
 
