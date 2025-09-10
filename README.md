@@ -18,6 +18,19 @@ Available apps:
 django_features.system_message
 ```
 
+## Configuration
+
+If you want to use `django_features`, your base configuration class should inherit from `django_features.settings.BaseConfiguration`.
+
+```
+from django_features.settings import BaseConfiguration
+
+
+class Base(BaseConfiguration):
+    ...
+```
+
+
 ### System Message
 
 If you want to use `django_features.system_message`, your base configuration class should inherit from `django_features.system_message.settings.SystemMessageConfigurationMixin`.

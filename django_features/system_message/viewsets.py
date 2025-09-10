@@ -10,12 +10,12 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter
 from rest_framework.filters import SearchFilter
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from django_features.pagination import PageNumberPaginator
 from django_features.system_message import models
 from django_features.system_message import serializers
 from django_features.system_message.permissions import CanManageSystemMessage
@@ -63,7 +63,7 @@ class SystemMessageViewSet(ModelViewSet):
         "title",
         "type",
     )
-    pagination_class = PageNumberPagination
+    pagination_class = PageNumberPaginator
     permission_classes = [CanManageSystemMessage]
     queryset = models.SystemMessage.objects.all()
     search_fields = ("background_color", "message", "message_color", "title", "type")
