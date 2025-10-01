@@ -1,6 +1,9 @@
 from typing import Any
 
+from factory import SubFactory  # type: ignore
 from factory.django import DjangoModelFactory
+
+from app import models
 
 
 class BaseFactory(DjangoModelFactory):
@@ -9,3 +12,31 @@ class BaseFactory(DjangoModelFactory):
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Any:
         return super().__new__(*args, **kwargs)  # type: ignore
+
+
+class PersonTypeFactory(BaseFactory):
+    class Meta:
+        model = models.PersonType
+
+    title = "Type 1"
+
+
+class PersonFactory(BaseFactory):
+    class Meta:
+        model = models.Person
+
+    firstname = "John"
+    lastname = "Doe"
+    email = "john.doe@example.com"
+
+
+class AddressFactory(BaseFactory):
+    class Meta:
+        model = models.Address
+
+    city = "New York"
+    country = "USA"
+    street = "123 Main St"
+    zip_code = "10001"
+
+    target = SubFactory(PersonFactory)  # type: ignore

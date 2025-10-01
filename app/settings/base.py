@@ -25,7 +25,9 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
             "django_linear_migrations",
             "constance",
             "rest_framework",
+            "django_features.custom_fields",
             "django_features.system_message",
+            "app",
         ]
         return installed_apps
 
