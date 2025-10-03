@@ -42,7 +42,9 @@ class SystemMessage(TimeStampedModel):
         verbose_name=_("Typ"),
     )
     dismissed_users = models.ManyToManyField(
-        get_user_model(), related_name="dismissed_system_messages"
+        get_user_model(),
+        related_name="dismissed_system_messages",
+        blank=True,
     )
 
     class Meta:
