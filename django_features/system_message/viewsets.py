@@ -44,6 +44,8 @@ class SystemMessageFilter(filters.FilterSet):
         return queryset.filter(q)
 
     def filter_dismissed(self, queryset: QuerySet, name: str, value: bool) -> QuerySet:
+        if not self.request.user.is_authenticated:
+            return queryset
         q = Q(dismissed_users=self.request.user)
         if not value:
             return queryset.exclude(q)
@@ -71,5 +73,6 @@ class SystemMessageViewSet(ModelViewSet):
 
     @action(methods=["patch"], detail=True)
     def dismiss(self, request: Request, pk: int, *args: Any, **kwargs: Any) -> Response:
-        self.get_object().dismissed_users.add(self.request.user)
+        if self.request.user.is_authenticated:
+            self.get_object().dismissed_users.add(self.request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
