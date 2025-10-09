@@ -127,9 +127,26 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
     CONSTANCE_BACKEND = "constance.backends.database.DatabaseBackend"
 
     @property
+    def CONSTANCE_ADDITIONAL_FIELDS(self) -> dict:
+        config = super().CONSTANCE_ADDITIONAL_FIELDS
+        return {**config}
+
+    @property
     def CONSTANCE_CONFIG(self) -> dict:
         config = super().CONSTANCE_CONFIG
-        return {**config, "TEST": (False, "Test add addidional constances", bool)}
+        return {
+            **config,
+            "JSON_FIELD": (
+                {"key": {"nested_key": "value"}},
+                "Test formated field",
+                "json",
+            ),
+            "MODEL_MAPPING_FIELD": (
+                {},
+                "Test model field mapping",
+                "model_field_mapping",
+            ),
+        }
 
     @property
     def CONSTANCE_CONFIG_FIELDSETS(self) -> dict:
@@ -137,8 +154,8 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
         return {
             **config,
             "Miscellaneous": {
-                "fields": ("TEST",),
-                "collapse": True,
+                "fields": ("JSON_FIELD", "MODEL_MAPPING_FIELD"),
+                "collapse": False,
             },
         }
 

@@ -1,5 +1,6 @@
-__all__ = ["Address", "Person", "PersonType"]
+__all__ = ["Address", "Municipality", "Person", "PersonType"]
 
 from .address import Address
+from .municipality import Municipality
 from .person import Person
 from .person import PersonType

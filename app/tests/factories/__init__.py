@@ -1,5 +1,7 @@
+import uuid
 from typing import Any
 
+from factory import LazyFunction  # type: ignore
 from factory import SubFactory  # type: ignore
 from factory.django import DjangoModelFactory
 
@@ -37,6 +39,7 @@ class AddressFactory(BaseFactory):
     city = "New York"
     country = "USA"
     street = "123 Main St"
+    external_uid = LazyFunction(lambda: uuid.uuid4())  # type: ignore
     zip_code = "10001"
 
     target = SubFactory(PersonFactory)  # type: ignore
