@@ -1,5 +1,6 @@
 from constance import config
 from django.contrib import admin
+from django.http import HttpRequest
 from django.utils.safestring import mark_safe
 from django.utils.safestring import SafeString
 
@@ -8,7 +9,7 @@ from django_features.system_message import models
 
 
 class SystemMessageBaseAdmin(admin.ModelAdmin):
-    def has_module_permission(self, request):
+    def has_module_permission(self, request: HttpRequest) -> bool:
         return config.ENABLE_SYSTEM_MESSAGE
 
 
