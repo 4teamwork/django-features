@@ -10,7 +10,7 @@ class CustomFieldFactory(BaseFactory):
 
     field_type = models.CustomField.FIELD_TYPES.CHAR
     identifier = "custom_field"
-    label = "Custom Field Label"
+    label_de = "Custom Field Label"
 
 
 class CustomValueFactory(BaseFactory):

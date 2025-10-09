@@ -4,12 +4,13 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.http import HttpRequest
+from modeltranslation.admin import TranslationAdmin
 
 from django_features.custom_fields import models
 from django_features.custom_fields.models import CustomFieldBaseModel
 
 
-class CustomFieldBaseAdmin(admin.ModelAdmin):
+class CustomFieldBaseAdmin(TranslationAdmin):
     def has_module_permission(self, request: HttpRequest) -> bool:
         return settings.CUSTOM_FIELDS_FEATURE
 
@@ -33,7 +34,7 @@ class CustomFieldBaseAdmin(admin.ModelAdmin):
 
 @admin.register(models.CustomField)
 class CustomFieldAdmin(CustomFieldBaseAdmin):
-    list_display = ("id", "identifier", "__str__", "field_type")
+    list_display = ["id", "identifier", "__str__", "field_type"]
     list_display_links = (
         "id",
         "identifier",
@@ -44,6 +45,6 @@ class CustomFieldAdmin(CustomFieldBaseAdmin):
 
 
 @admin.register(models.CustomValue)
-class ValueAdmin(admin.ModelAdmin):
-    list_display = ("id", "__str__")
+class ValueAdmin(TranslationAdmin):
+    list_display = ["id", "__str__"]
     search_fields = ("text", "value", "field__label", "field__identifier")
