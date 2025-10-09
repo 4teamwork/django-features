@@ -83,3 +83,5 @@ Before running the release command, it is necessary to configure poetry with an 
 ``` bash
 poetry config pypi-token.pypi <token>
 ```
+
+The `version` attribute in the `pyproject.toml` file should be updated to the new version before running the release command, because this version will be published to PyPI.
