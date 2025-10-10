@@ -1,4 +1,12 @@
 
+2025.3.1 (2025-10-10)
+---------------------
+
+Other changes:
+
+- [system_message]: Fix empty relation for dismissed users and handle unauthorized queryset filters. (`TI-2893 <https://4teamwork.atlassian.net/browse/TI-2893>`_)
+
+
 2025.3.0 (2025-09-10)
 ---------------------
 
