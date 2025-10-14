@@ -1,3 +1,4 @@
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
@@ -85,6 +86,16 @@ class CustomField(TimeStampedModel):
     )
     order = models.PositiveSmallIntegerField(verbose_name=_("Reihenfolge"), default=0)
     required = models.BooleanField(verbose_name=_("Erforderlich"), default=False)
+
+    type_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        related_name="customfield_set_for_type",
+        blank=True,
+        null=True,
+    )
+    type_id = models.PositiveIntegerField(null=True, blank=True)
+    type_object = GenericForeignKey(ct_field="type_content_type", fk_field="type_id")
 
     objects = CustomFieldQuerySet.as_manager()
 

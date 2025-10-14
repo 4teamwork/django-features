@@ -1,1 +1,1 @@
-0002_persontype_person_person_type
+0002_add_person_type_and_relation
