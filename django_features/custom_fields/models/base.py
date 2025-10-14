@@ -105,6 +105,15 @@ class CustomFieldModelBaseManager(models.Manager):
         )
 
 
+class CustomFieldTypeBaseModel(TimeStampedModel):
+    custom_fields = GenericRelation(
+        CustomField, object_id_field="type_id", content_type_field="type_content_type"
+    )
+
+    class Meta:
+        abstract = True
+
+
 class CustomFieldBaseModel(TimeStampedModel):
     _custom_field_type_attr: str | None = None
     _custom_values_to_save: list[CustomValue] = []
