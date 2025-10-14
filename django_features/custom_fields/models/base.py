@@ -1,9 +1,10 @@
 from typing import Any
 
+from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.postgres.expressions import ArraySubquery
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models import OuterRef
+from django.db.models import Q
 from django.db.models import QuerySet
 from django.db.models import Subquery
 from django.db.models.expressions import RawSQL
@@ -17,6 +18,26 @@ from django_features.custom_fields.models.value import CustomValue
 
 
 class CustomFieldModelBaseManager(models.Manager):
+    def get_type_model(self) -> "CustomFieldTypeBaseModel | None":
+        if self.model._custom_field_type_attr is None or not hasattr(
+            self.model, self.model._custom_field_type_attr
+        ):
+            return None
+        return getattr(
+            self.model, self.model._custom_field_type_attr
+        ).field.related_model
+
+    def get_type_filter(self) -> Q:
+        type_model = self.get_type_model()
+        if type_model is not None:
+            type_filter = {
+                "type_content_type__app_label": type_model._meta.app_label,
+                "type_content_type__model": type_model._meta.model_name,
+                "type_id": OuterRef(f"{self.model._custom_field_type_attr}_id"),
+            }
+            return Q(**type_filter) | Q(type_id__isnull=True)
+        return Q()
+
     def _subquery(self, field: CustomField) -> Subquery:
         pk_filter = {
             f"{self.model._meta.model_name}__id": OuterRef("pk"),
@@ -75,15 +96,17 @@ class CustomFieldModelBaseManager(models.Manager):
             .get_queryset()
             .annotate(**fields)
             .annotate(
-                custom_field_keys=Cast(
-                    list(available_fields.values_list("identifier", flat=True)),
-                    output_field=ArrayField(models.CharField()),
+                custom_field_keys=ArraySubquery(
+                    available_fields.filter(self.get_type_filter()).values_list(
+                        "identifier", flat=True
+                    )
                 )
             )
         )
 
 
 class CustomFieldBaseModel(TimeStampedModel):
+    _custom_field_type_attr: str | None = None
     _custom_values_to_save: list[CustomValue] = []
     _custom_values_to_remove: list[CustomValue] = []
 
