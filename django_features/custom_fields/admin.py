@@ -8,6 +8,7 @@ from modeltranslation.admin import TranslationAdmin
 
 from django_features.custom_fields import models
 from django_features.custom_fields.models import CustomFieldBaseModel
+from django_features.custom_fields.models import CustomFieldTypeBaseModel
 
 
 class CustomFieldBaseAdmin(TranslationAdmin):
@@ -22,6 +23,14 @@ class CustomFieldBaseAdmin(TranslationAdmin):
                 for content_type in ContentType.objects.all()
                 if content_type.model_class() is not None
                 and issubclass(content_type.model_class(), CustomFieldBaseModel)
+            ]
+        )
+        form.base_fields["type_content_type"].queryset = ContentType.objects.filter(
+            id__in=[
+                content_type.id
+                for content_type in ContentType.objects.all()
+                if content_type.model_class() is not None
+                and issubclass(content_type.model_class(), CustomFieldTypeBaseModel)
             ]
         )
         return form
