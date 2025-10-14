@@ -5,10 +5,12 @@ from datetime import timezone
 from django.contrib.contenttypes.models import ContentType
 
 from app.models import Person
+from app.models import PersonType
 from app.tests import APITestCase
 from app.tests.custom_fields.factories import CustomFieldFactory
 from app.tests.custom_fields.factories import CustomValueFactory
 from app.tests.factories import PersonFactory
+from app.tests.factories import PersonTypeFactory
 from django_features.custom_fields.models import CustomField
 
 
@@ -18,7 +20,9 @@ class CustomFieldBaseModelManagerTest(APITestCase):
 
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
-        self.person: Person = PersonFactory()  # type: ignore
+        self.person_type_1: PersonType = PersonTypeFactory()  # type: ignore
+        self.person_type_2: PersonType = PersonTypeFactory()  # type: ignore
+        self.person: Person = PersonFactory(person_type=self.person_type_1)  # type: ignore
 
     def test_custom_field_base_manager_annotate_custom_field_keys(self) -> None:
         CustomFieldFactory(identifier="birthday", content_type=self.person_ct)
@@ -26,6 +30,20 @@ class CustomFieldBaseModelManagerTest(APITestCase):
         self.assertEqual(
             ["birthday", "hobby"], Person.objects.first().custom_field_keys
         )
+
+    def test_custom_field_base_manager_annotate_only_type_specific_fields(self) -> None:
+        CustomFieldFactory(
+            identifier="birthday",
+            content_type=self.person_ct,
+            type_object=self.person_type_1,
+        )
+        CustomFieldFactory(
+            identifier="hobby",
+            content_type=self.person_ct,
+            type_object=self.person_type_2,
+        )
+        self.person.refresh_with_custom_fields()
+        self.assertEqual(["birthday"], Person.objects.first().custom_field_keys)
 
     def test_custom_field_base_manager_annotate_char_value(self) -> None:
         field = CustomFieldFactory(

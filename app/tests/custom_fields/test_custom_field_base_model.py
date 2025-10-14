@@ -5,10 +5,12 @@ from datetime import timezone
 from django.contrib.contenttypes.models import ContentType
 
 from app.models import Person
+from app.models import PersonType
 from app.tests import APITestCase
 from app.tests.custom_fields.factories import CustomFieldFactory
 from app.tests.custom_fields.factories import CustomValueFactory
 from app.tests.factories import PersonFactory
+from app.tests.factories import PersonTypeFactory
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomValue
 
@@ -19,7 +21,11 @@ class CustomFieldBaseModelTest(APITestCase):
 
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
-        self.person: Person = PersonFactory()  # type: ignore
+        self.person_type: PersonType = PersonTypeFactory()  # type: ignore
+        self.person: Person = PersonFactory(person_type=self.person_type)  # type: ignore
+
+    def test_custom_field_base_model_custom_field_type_model(self) -> None:
+        self.assertEqual(PersonType, Person.objects.get_type_model())
 
     def test_custom_field_base_model_set_char_value(self) -> None:
         CustomFieldFactory(
