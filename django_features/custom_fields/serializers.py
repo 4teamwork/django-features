@@ -62,6 +62,8 @@ CustomFieldData = namedtuple(
 
 class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     _custom_fields: list[CustomFieldData] = []
+    _unique_choice_field = "id"
+    _write_only_serializer = False
 
     class Meta:
         abstract = True
@@ -73,9 +75,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         instance: Any = None,
         data: Any = empty,
         exclude_custom_fields: bool = False,
+        write_only_serializer: bool = False,
         **kwargs: Any,
     ) -> None:
         self.exclude_custom_fields: bool = exclude_custom_fields
+        self.write_only_serializer = (
+            write_only_serializer or self._write_only_serializer
+        )
         super().__init__(instance, data, **kwargs)
 
     @property
@@ -98,21 +104,35 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     field.multiple_choice,
                 )
             )
-            if field.choice_field:
-                fields[f"{field.identifier}_id"] = ChoiceIdField(
-                    required=field.required, write_only=True
-                )
+            field_identifier = field.identifier
+
             fields[field.identifier] = field.serializer_field
+            if field.choice_field:
+                serializer_field = ChoiceIdField(
+                    field=field,
+                    required=field.required,
+                    write_only=True,
+                    unique_field=self._unique_choice_field,
+                )
+                if self.write_only_serializer:
+                    fields[field_identifier] = serializer_field
+                else:
+                    fields[f"{field_identifier}_id"] = serializer_field
         return fields
 
     def create(self, validated_data: dict) -> Any:
         custom_value_instances: list[CustomValue] = []
         choices: list[CustomValue] = []
         for field in self._custom_fields:
+            field_identifier = (
+                field.identifier
+                if self.write_only_serializer or not field.choice_field
+                else f"{field.identifier}_id"
+            )
+            value = validated_data.pop(field_identifier, None)
+            if value is None:
+                continue
             if not field.choice_field:
-                value = validated_data.pop(field.identifier, None)
-                if not value:
-                    continue
                 custom_value_instances.append(
                     CustomValue(
                         field_id=field.id,
@@ -120,9 +140,6 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     )
                 )
             else:
-                value = validated_data.pop(f"{field.identifier}_id", None)
-                if not value:
-                    continue
                 if field.multiple_choice:
                     choices.extend(value)
                 else:
@@ -136,9 +153,12 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
 
     def update(self, instance: Any, validated_data: dict) -> Any:
         for field in self._custom_fields:
-            value = validated_data.pop(field.identifier, None)
-            if field.choice_field:
-                value = validated_data.pop(f"{field.identifier}_id", None)
+            field_identifier = (
+                field.identifier
+                if self.write_only_serializer
+                else f"{field.identifier}_id"
+            )
+            value = validated_data.pop(field_identifier, None)
             if value is not None:
                 setattr(instance, field.identifier, value)
         instance = super().update(instance, validated_data)
