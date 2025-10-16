@@ -14,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 
 from django_features.custom_fields.models.field import CustomField
+from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.value import CustomValue
 
 
@@ -184,3 +185,19 @@ class CustomFieldBaseModel(TimeStampedModel):
         if delete_custom_values:
             self.custom_values.filter(field__choice_field=False).delete()
         super().delete(using, keep_parents)
+
+    @property
+    def custom_field_type(self) -> CustomFieldTypeBaseModel | None:
+        if self._custom_field_type_attr and hasattr(self, self._custom_field_type_attr):
+            return getattr(self, self._custom_field_type_attr)
+        return None
+
+    @property
+    def default_custom_fields(self) -> CustomFieldQuerySet:
+        return CustomField.objects.default_for(self.__class__)
+
+    @property
+    def type_custom_fields(self) -> CustomFieldQuerySet:
+        if self.custom_field_type:
+            return self.custom_field_type.custom_fields.all()
+        return CustomField.objects.none()
