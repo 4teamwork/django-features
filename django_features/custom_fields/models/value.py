@@ -12,6 +12,12 @@ class CustomValueQuerySet(models.QuerySet):
             field__content_type__model=model._meta.model_name,
         )
 
+    def for_type(self, model: models.Model) -> "CustomValueQuerySet":
+        return self.select_related("content_type").filter(
+            field__type_content_type__app_label=model._meta.app_label,
+            field__type_content_type__model=model._meta.model_name,
+        )
+
 
 class CustomValue(TimeStampedModel):
     field = models.ForeignKey(

@@ -14,6 +14,12 @@ class CustomFieldQuerySet(models.QuerySet):
             content_type__model=model._meta.model_name,
         )
 
+    def for_type(self, model: models.Model) -> "CustomFieldQuerySet":
+        return self.select_related("content_type").filter(
+            type_content_type__app_label=model._meta.app_label,
+            type_content_type__model=model._meta.model_name,
+        )
+
 
 class FieldType:
     CHAR = "CHAR"
