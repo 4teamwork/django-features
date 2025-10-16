@@ -8,17 +8,23 @@ from rest_framework import serializers
 
 
 class CustomFieldQuerySet(models.QuerySet):
-    def for_model(self, model: models.Model) -> "CustomFieldQuerySet":
+    def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
             content_type__app_label=model._meta.app_label,
             content_type__model=model._meta.model_name,
         )
 
-    def for_type(self, model: models.Model) -> "CustomFieldQuerySet":
+    def for_type(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
             type_content_type__app_label=model._meta.app_label,
             type_content_type__model=model._meta.model_name,
         )
+
+    def default(self) -> "CustomFieldQuerySet":
+        return self.filter(type_id__isnull=True)
+
+    def default_for(self, model: type[models.Model]) -> "CustomFieldQuerySet":
+        return self.for_model(model).default()
 
 
 class FieldType:

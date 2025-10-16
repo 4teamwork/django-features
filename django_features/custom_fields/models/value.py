@@ -6,17 +6,23 @@ from django_features.custom_fields.models.field import CustomField
 
 
 class CustomValueQuerySet(models.QuerySet):
-    def for_model(self, model: models.Model) -> "CustomValueQuerySet":
+    def for_model(self, model: type[models.Model]) -> "CustomValueQuerySet":
         return self.select_related("field", "field__content_type").filter(
             field__content_type__app_label=model._meta.app_label,
             field__content_type__model=model._meta.model_name,
         )
 
-    def for_type(self, model: models.Model) -> "CustomValueQuerySet":
+    def for_type(self, model: type[models.Model]) -> "CustomValueQuerySet":
         return self.select_related("content_type").filter(
             field__type_content_type__app_label=model._meta.app_label,
             field__type_content_type__model=model._meta.model_name,
         )
+
+    def default(self) -> "CustomValueQuerySet":
+        return self.filter(field__type_id__isnull=True)
+
+    def default_for(self, model: type[models.Model]) -> "CustomValueQuerySet":
+        return self.for_model(model).default()
 
 
 class CustomValue(TimeStampedModel):
