@@ -8,6 +8,7 @@ from rest_framework.utils.model_meta import get_field_info
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomValue
 from django_features.custom_fields.models.value import CustomValueQuerySet
+from django_features.custom_fields.serializers import CustomChoiceSerializer
 
 
 class ChoiceIdField(serializers.Field):
@@ -55,3 +56,8 @@ class ChoiceIdField(serializers.Field):
         raise ValidationError(
             f"The given value {data} has not a valid type. Expected a list or int."
         )
+    def to_representation(
+        self, value: CustomValue | CustomValueQuerySet
+    ) -> int | list[int]:
+        return CustomChoiceSerializer(value, many=self.field.multiple_choice).data
+
