@@ -187,6 +187,10 @@ class CustomFieldBaseModel(TimeStampedModel):
         super().delete(using, keep_parents)
 
     @property
+    def custom_fields(self) -> CustomFieldQuerySet:
+        return CustomField.objects.for_model(self.__class__)
+
+    @property
     def custom_field_type(self) -> CustomFieldTypeBaseModel | None:
         if self._custom_field_type_attr and hasattr(self, self._custom_field_type_attr):
             return getattr(self, self._custom_field_type_attr)
