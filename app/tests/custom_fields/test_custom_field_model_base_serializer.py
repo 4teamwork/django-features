@@ -149,8 +149,8 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             "integer_value": 42,
             "boolean_value": True,
             "multiple_date_value": ["2000-01-01", "2001-01-01"],
-            "choice_value_id": self.choice_1.id,
-            "multiple_choice_value_id": [
+            "choice_value": self.choice_1.id,
+            "multiple_choice_value": [
                 self.multiple_choice_1.id,
                 self.multiple_choice_2.id,
             ],
@@ -249,7 +249,6 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
                 "text": None,
                 "value": "2000-01-01",
             },
-            "choice_value_id": self.choice_2.id,
             "multiple_choice_value": [
                 {
                     "id": self.multiple_choice_1.id,
@@ -261,10 +260,6 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
                     "text": None,
                     "value": "2002-01-01",
                 },
-            ],
-            "multiple_choice_value_id": [
-                self.multiple_choice_1.id,
-                self.multiple_choice_3.id,
             ],
         }
 
@@ -352,7 +347,7 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             "char_value": "Some char value2",
             "datetime_value": "2000-01-02T12:30:00+01:00",
             "integer_value": 43,
-            "multiple_choice_value_id": [],
+            "multiple_choice_value": [],
         }
 
         serializer = PersonSerializer(self.person, data=data, partial=True)
