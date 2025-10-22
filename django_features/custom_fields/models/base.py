@@ -2,7 +2,9 @@ from typing import Any
 
 from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.postgres.expressions import ArraySubquery
+from django.db import IntegrityError
 from django.db import models
+from django.db import ProgrammingError
 from django.db.models import OuterRef
 from django.db.models import Q
 from django.db.models import QuerySet
@@ -76,34 +78,39 @@ class CustomFieldModelBaseManager(models.Manager):
         """
         We filter all available custom fields for the current model.
         """
-        available_fields = CustomField.objects.for_model(self.model)
+        try:
+            available_fields = CustomField.objects.for_model(self.model)
 
-        """
-        This for loop creates a dict with all available custom field values with a subquery for the specific object.
-        The dict key is the identifier of the custom field amd the value is the custom value.
-        If the object has no value for the field, it will return None.
-        More information can be found in the django documentation:
-        https://docs.djangoproject.com/en/5.2/ref/models/expressions/#subquery-expressions
-        """
-        fields = {field.identifier: self._subquery(field) for field in available_fields}
+            """
+            This for loop creates a dict with all available custom field values with a subquery for the specific object.
+            The dict key is the identifier of the custom field amd the value is the custom value.
+            If the object has no value for the field, it will return None.
+            More information can be found in the django documentation:
+            https://docs.djangoproject.com/en/5.2/ref/models/expressions/#subquery-expressions
+            """
+            fields = {
+                field.identifier: self._subquery(field) for field in available_fields
+            }
 
-        """
-        # The dict can be unpacked and used for the dynamic annotations.
-        # We also annotate the available custom field identifiers as 'custom_field_keys'.
-        # Therefore, we know which custom fields are available for this object.
-        """
-        return (
-            super()
-            .get_queryset()
-            .annotate(**fields)
-            .annotate(
-                custom_field_keys=ArraySubquery(
-                    available_fields.filter(self.get_type_filter()).values_list(
-                        "identifier", flat=True
+            """
+            # The dict can be unpacked and used for the dynamic annotations.
+            # We also annotate the available custom field identifiers as 'custom_field_keys'.
+            # Therefore, we know which custom fields are available for this object.
+            """
+            return (
+                super()
+                .get_queryset()
+                .annotate(**fields)
+                .annotate(
+                    custom_field_keys=ArraySubquery(
+                        available_fields.filter(self.get_type_filter()).values_list(
+                            "identifier", flat=True
+                        )
                     )
                 )
             )
-        )
+        except (ProgrammingError, RuntimeError, IntegrityError):
+            return super().get_queryset()
 
 
 class CustomFieldTypeBaseModel(TimeStampedModel):
