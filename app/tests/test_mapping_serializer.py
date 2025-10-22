@@ -89,7 +89,7 @@ class MappingSerializerTestCase(APITestCase):
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             choice_field=True,
-            multiple_choice=True,
+            multiple=True,
         )
 
         self.choice_1 = CustomValueFactory(field=self.choice_field, value="2000-01-01")

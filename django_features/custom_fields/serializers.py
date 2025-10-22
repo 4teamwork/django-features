@@ -42,7 +42,6 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             "label",
             "modified",
             "multiple",
-            "multiple_choice",
             "order",
         ]
 
@@ -57,7 +56,7 @@ CustomFieldData = namedtuple(
         "identifier",
         "choices",
         "choice_field",
-        "multiple_choice",
+        "multiple",
         "serializer_field",
     ],
 )
@@ -105,7 +104,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     field.identifier,
                     field.choices,
                     field.choice_field,
-                    field.multiple_choice,
+                    field.multiple,
                     field.serializer_field,
                 )
             )
@@ -130,7 +129,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     )
                 )
             else:
-                if field.multiple_choice:
+                if field.multiple:
                     choices.extend(value)
                 else:
                     choices.append(value)
@@ -164,7 +163,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             value = validated_data.pop(field.identifier, None)
             if field.choice_field:
                 instance.custom_values.remove(*field.choices)
-                if field.multiple_choice:
+                if field.multiple:
                     instance.custom_values.add(*value)
                 else:
                     instance.custom_values.add(value)

@@ -93,9 +93,6 @@ class CustomField(TimeStampedModel):
     identifier = models.SlugField(max_length=64, unique=True, db_index=True)
     label = models.CharField(verbose_name=_("Name"))
     multiple = models.BooleanField(verbose_name=_("Liste"), default=False)
-    multiple_choice = models.BooleanField(
-        verbose_name=_("Mehrfachauswahlfeld"), default=False
-    )
     order = models.PositiveSmallIntegerField(verbose_name=_("Reihenfolge"), default=0)
     required = models.BooleanField(verbose_name=_("Erforderlich"), default=False)
 

@@ -38,7 +38,7 @@ class ChoiceIdField(serializers.Field):
     def to_representation(
         self, value: CustomValue | CustomValueQuerySet
     ) -> int | list[int]:
-        return CustomChoiceSerializer(value, many=self.field.multiple_choice).data
+        return CustomChoiceSerializer(value, many=self.field.multiple).data
 
     def _choice_field(self, data: int | str | dict) -> CustomValue:
         if isinstance(data, dict):
@@ -66,7 +66,7 @@ class ChoiceIdField(serializers.Field):
         return values
 
     def to_internal_value(self, data: Any) -> CustomValue | CustomValueQuerySet:
-        if self.field.multiple_choice and isinstance(data, list):
+        if self.field.multiple and isinstance(data, list):
             return self._multiple_choice(data)
         elif self.field.choice_field and isinstance(data, (int, str, dict)):
             return self._choice_field(data)

@@ -65,7 +65,7 @@ class CustomFieldModelBaseManager(models.Manager):
                 ).values_list("formated", flat=True)
             )
         else:
-            sq = ArraySubquery if field.multiple_choice else Subquery
+            sq = ArraySubquery if field.multiple else Subquery
             return sq(
                 custom_values_queryset.annotate(
                     formated=JSONObject(id="id", text="text", value="value")
@@ -161,7 +161,7 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     def _set_choice_value(self, field: CustomField, value: Any) -> None:
         self._custom_values_to_remove.extend(CustomValue.objects.filter(field=field))
-        if field.multiple_choice:
+        if field.multiple:
             # We expect a list for multiple choice fields, so we must extend the list with the items of the list
             self._custom_values_to_save.extend(value)
         else:

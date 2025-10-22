@@ -275,7 +275,7 @@ class CustomFieldBaseModelTest(APITestCase):
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             choice_field=True,
-            multiple_choice=True,
+            multiple=True,
         )
         choice_1 = CustomValueFactory(field=field, value="2000-01-01")
         choice_2 = CustomValueFactory(field=field, value="2001-01-01")
