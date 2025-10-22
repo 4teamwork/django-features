@@ -28,8 +28,112 @@ msgstr ""
 msgid "Französisch"
 msgstr ""
 
+#: django_features/custom_fields/models/base.py
+#: django_features/custom_fields/models/value.py
+msgid "Benutzerdefinierte Werte"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Text (einzeilig)"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Text (mehrzeilig)"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Datum"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Datum und Zeit"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Zahl (Ganzzahl)"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Checkbox"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Leeren String erlauben"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Leere Werte erlauben"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Auswahlfeld"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Standardwert"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Editierbar"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Externer Key"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Feldtyp"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Ausblenden"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
 #: django_features/system_message/models.py
 msgid "Name"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Liste"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Mehrfachauswahlfeld"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+#: django_features/custom_fields/models/value.py
+#: django_features/system_message/models.py
+msgid "Reihenfolge"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Erforderlich"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Benutzerdefiniertes Feld"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Benutzerdefinierte Felder"
+msgstr ""
+
+#: django_features/custom_fields/models/value.py
+msgid "Feld"
+msgstr ""
+
+#: django_features/custom_fields/models/value.py
+msgid "Text"
+msgstr ""
+
+#: django_features/custom_fields/models/value.py
+msgid "Wert"
+msgstr ""
+
+#: django_features/custom_fields/models/value.py
+msgid "Benutzerdefinierter Wert"
 msgstr ""
 
 #: django_features/system_message/models.py
@@ -58,10 +162,6 @@ msgstr ""
 
 #: django_features/system_message/models.py
 msgid "Ende"
-msgstr ""
-
-#: django_features/system_message/models.py
-msgid "Reihenfolge"
 msgstr ""
 
 #: django_features/system_message/models.py

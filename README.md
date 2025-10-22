@@ -16,6 +16,7 @@ Add desired app to `INSTALLED_APPS` in your Django project.
 Available apps:
 ```
 django_features.system_message
+django_features.custom_fields
 ```
 
 ## Configuration
@@ -30,6 +31,27 @@ class Base(BaseConfiguration):
     ...
 ```
 
+### Custom Fields
+
+To use all features of the `django_features.custom_fields` app, the following steps are required:
+
+Add the `django_features.custom_fields.routers.custom_field_router` to your `ROOT_URLCONF`. For example:
+
+```
+path("api/", include(custom_field_router.urls)),
+```
+
+#### Models
+
+Your models should inherit from `django_features.custom_fields.models.CustomFieldBaseModel`.
+
+#### Querysets
+
+Your querysets should inherit from `django_features.custom_fields.models.CustomFieldModelBaseManager`.
+
+#### Serializers
+
+Your serializers should inherit from `django_features.custom_fields.serializers.CustomFieldBaseModelSerializer`.
 
 ### System Message
 
