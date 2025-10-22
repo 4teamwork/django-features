@@ -152,13 +152,13 @@ class MappingSerializerTestCase(APITestCase):
         )
         self.assertEqual(
             instance.choice_value,
-            {"id": self.choice_1.id, "text": None, "value": "2000-01-01"},
+            {"id": self.choice_1.id, "label": None, "value": "2000-01-01"},
         )
         self.assertEqual(
             instance.multiple_choice_value,
             [
-                {"id": self.multiple_choice_1.id, "text": None, "value": "2000-01-01"},
-                {"id": self.multiple_choice_2.id, "text": None, "value": "2001-01-01"},
+                {"id": self.multiple_choice_1.id, "label": None, "value": "2000-01-01"},
+                {"id": self.multiple_choice_2.id, "label": None, "value": "2001-01-01"},
             ],
         )
 
@@ -215,13 +215,13 @@ class MappingSerializerTestCase(APITestCase):
         )
         self.assertEqual(
             instance.choice_value,
-            {"id": self.choice_2.id, "text": None, "value": "2001-01-01"},
+            {"id": self.choice_2.id, "label": None, "value": "2001-01-01"},
         )
         self.assertEqual(
             instance.multiple_choice_value,
             [
-                {"id": self.multiple_choice_1.id, "text": None, "value": "2000-01-01"},
-                {"id": self.multiple_choice_3.id, "text": None, "value": "2002-01-01"},
+                {"id": self.multiple_choice_1.id, "label": None, "value": "2000-01-01"},
+                {"id": self.multiple_choice_3.id, "label": None, "value": "2002-01-01"},
             ],
         )
 

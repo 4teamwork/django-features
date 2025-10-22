@@ -44,17 +44,17 @@ class CustomFieldViewSetTest(APITestCase):
         )
         self.choice_1 = CustomValueFactory(
             field=self.choice_field,
-            text="Choice 1",
+            label="Choice 1",
             value="choice_1",
         )
         self.choice_2 = CustomValueFactory(
             field=self.choice_field,
-            text="Choice 2",
+            label="Choice 2",
             value="choice_2",
         )
         self.choice_3 = CustomValueFactory(
             field=self.choice_field,
-            text="Choice 3",
+            label="Choice 3",
             value="choice_3",
         )
 
@@ -65,17 +65,17 @@ class CustomFieldViewSetTest(APITestCase):
                 "choices": [
                     {
                         "id": self.choice_1.id,
-                        "text": "Choice 1",
+                        "label": "Choice 1",
                         "value": "choice_1",
                     },
                     {
                         "id": self.choice_2.id,
-                        "text": "Choice 2",
+                        "label": "Choice 2",
                         "value": "choice_2",
                     },
                     {
                         "id": self.choice_3.id,
-                        "text": "Choice 3",
+                        "label": "Choice 3",
                         "value": "choice_3",
                     },
                 ],

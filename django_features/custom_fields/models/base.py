@@ -68,7 +68,7 @@ class CustomFieldModelBaseManager(models.Manager):
             sq = ArraySubquery if field.multiple else Subquery
             return sq(
                 custom_values_queryset.annotate(
-                    formated=JSONObject(id="id", text="text", value="value")
+                    formated=JSONObject(id="id", label="label", value="value")
                 ).values_list("formated", flat=True)
             )
 

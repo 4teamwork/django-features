@@ -56,4 +56,4 @@ class CustomFieldAdmin(CustomFieldBaseAdmin):
 @admin.register(models.CustomValue)
 class ValueAdmin(TranslationAdmin):
     list_display = ["id", "__str__"]
-    search_fields = ("text", "value", "field__label", "field__identifier")
+    search_fields = ("label", "value", "field__label", "field__identifier")

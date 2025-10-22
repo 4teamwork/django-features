@@ -13,7 +13,7 @@ from django_features.custom_fields.models import CustomValue
 class CustomChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomValue
-        fields = ["id", "text", "value"]
+        fields = ["id", "label", "value"]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
