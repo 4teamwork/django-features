@@ -77,7 +77,7 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
                         nested_field_data[field_name][nested_field] = self.initial_data[
                             internal_name
                         ]
-                    else:
+                    elif internal_name in self.initial_data:
                         nested_field_data[field_name] = {
                             nested_field: self.initial_data[internal_name]
                         }
