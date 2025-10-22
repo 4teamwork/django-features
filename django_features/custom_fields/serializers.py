@@ -6,6 +6,7 @@ from rest_framework import serializers
 from rest_framework.fields import empty
 
 from django_features.custom_fields.models import CustomField
+from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomValue
 
 
@@ -46,11 +47,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
         ]
 
     def get_choices(self, obj: CustomField) -> list:
-        if not obj.choice_field:
-            return []
-        return CustomChoiceSerializer(
-            CustomValue.objects.filter(field=obj), many=True
-        ).data
+        return CustomChoiceSerializer(obj.choices, many=True).data
 
 
 CustomFieldData = namedtuple(

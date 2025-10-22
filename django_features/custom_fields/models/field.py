@@ -120,6 +120,14 @@ class CustomField(TimeStampedModel):
         return f"{self.label}"
 
     @property
+    def choices(self) -> list[tuple[str, str]]:
+        from django_features.custom_fields.models import CustomValue
+
+        if not self.choice_field:
+            return CustomValue.objects.none()
+        return CustomValue.objects.filter(field=self)
+
+    @property
     def output_field(self) -> models.Field:
         output_field = CustomField.TYPE_FIELD_MAP.get(self.field_type)
         if not output_field:
