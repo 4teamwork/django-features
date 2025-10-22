@@ -145,7 +145,8 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     ) -> None:
         serializer_field = field.serializer_field
         serializer_field.run_validators(value)
-        value = serializer_field.to_representation(value)
+        if value is not None:
+            value = serializer_field.to_representation(value)
         try:
             value_object = instance.custom_values.select_related("field").get(
                 field_id=field.id
