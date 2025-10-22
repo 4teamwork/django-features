@@ -44,7 +44,7 @@ class CustomValue(TimeStampedModel):
         verbose_name_plural = _("Benutzerdefinierte Werte")
 
     def __str__(self) -> str:
-        return self.label
+        return self.text or ""
 
     @property
     def text(self) -> str:
