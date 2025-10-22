@@ -2,7 +2,9 @@ from typing import Any
 
 from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.postgres.expressions import ArraySubquery
+from django.db import IntegrityError
 from django.db import models
+from django.db import ProgrammingError
 from django.db.models import OuterRef
 from django.db.models import Q
 from django.db.models import QuerySet
@@ -65,10 +67,10 @@ class CustomFieldModelBaseManager(models.Manager):
                 ).values_list("formated", flat=True)
             )
         else:
-            sq = ArraySubquery if field.multiple_choice else Subquery
+            sq = ArraySubquery if field.multiple else Subquery
             return sq(
                 custom_values_queryset.annotate(
-                    formated=JSONObject(id="id", text="text", value="value")
+                    formated=JSONObject(id="id", label="label", value="value")
                 ).values_list("formated", flat=True)
             )
 
@@ -76,34 +78,39 @@ class CustomFieldModelBaseManager(models.Manager):
         """
         We filter all available custom fields for the current model.
         """
-        available_fields = CustomField.objects.for_model(self.model)
+        try:
+            available_fields = CustomField.objects.for_model(self.model)
 
-        """
-        This for loop creates a dict with all available custom field values with a subquery for the specific object.
-        The dict key is the identifier of the custom field amd the value is the custom value.
-        If the object has no value for the field, it will return None.
-        More information can be found in the django documentation:
-        https://docs.djangoproject.com/en/5.2/ref/models/expressions/#subquery-expressions
-        """
-        fields = {field.identifier: self._subquery(field) for field in available_fields}
+            """
+            This for loop creates a dict with all available custom field values with a subquery for the specific object.
+            The dict key is the identifier of the custom field amd the value is the custom value.
+            If the object has no value for the field, it will return None.
+            More information can be found in the django documentation:
+            https://docs.djangoproject.com/en/5.2/ref/models/expressions/#subquery-expressions
+            """
+            fields = {
+                field.identifier: self._subquery(field) for field in available_fields
+            }
 
-        """
-        # The dict can be unpacked and used for the dynamic annotations.
-        # We also annotate the available custom field identifiers as 'custom_field_keys'.
-        # Therefore, we know which custom fields are available for this object.
-        """
-        return (
-            super()
-            .get_queryset()
-            .annotate(**fields)
-            .annotate(
-                custom_field_keys=ArraySubquery(
-                    available_fields.filter(self.get_type_filter()).values_list(
-                        "identifier", flat=True
+            """
+            # The dict can be unpacked and used for the dynamic annotations.
+            # We also annotate the available custom field identifiers as 'custom_field_keys'.
+            # Therefore, we know which custom fields are available for this object.
+            """
+            return (
+                super()
+                .get_queryset()
+                .annotate(**fields)
+                .annotate(
+                    custom_field_keys=ArraySubquery(
+                        available_fields.filter(self.get_type_filter()).values_list(
+                            "identifier", flat=True
+                        )
                     )
                 )
             )
-        )
+        except (ProgrammingError, RuntimeError, IntegrityError):
+            return super().get_queryset()
 
 
 class CustomFieldTypeBaseModel(TimeStampedModel):
@@ -161,7 +168,7 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     def _set_choice_value(self, field: CustomField, value: Any) -> None:
         self._custom_values_to_remove.extend(CustomValue.objects.filter(field=field))
-        if field.multiple_choice:
+        if field.multiple:
             # We expect a list for multiple choice fields, so we must extend the list with the items of the list
             self._custom_values_to_save.extend(value)
         else:
@@ -185,6 +192,10 @@ class CustomFieldBaseModel(TimeStampedModel):
         if delete_custom_values:
             self.custom_values.filter(field__choice_field=False).delete()
         super().delete(using, keep_parents)
+
+    @property
+    def custom_fields(self) -> CustomFieldQuerySet:
+        return CustomField.objects.for_model(self.__class__)
 
     @property
     def custom_field_type(self) -> CustomFieldTypeBaseModel | None:

@@ -27,6 +27,14 @@ class Person(CustomFieldBaseModel):
         on_delete=models.SET_NULL,
         verbose_name="Type",
     )
+    place_of_residence = models.ForeignKey(
+        "Municipality",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        verbose_name="Place of residence",
+        related_name="persons",
+    )
 
     class Meta:
         verbose_name = "Person"

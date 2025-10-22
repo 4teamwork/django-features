@@ -33,7 +33,7 @@ class CustomValue(TimeStampedModel):
         on_delete=models.CASCADE,
     )
     order = models.PositiveIntegerField(_("Reihenfolge"), default=0)
-    text = models.CharField(verbose_name=_("Text"), null=True, blank=True)
+    label = models.CharField(verbose_name=_("Label"), null=True, blank=True)
     value = models.JSONField(verbose_name=_("Wert"), null=True, blank=True)
 
     objects = CustomValueQuerySet.as_manager()
@@ -47,5 +47,5 @@ class CustomValue(TimeStampedModel):
         return self.label
 
     @property
-    def label(self) -> str:
-        return self.text or str(self.value)
+    def text(self) -> str:
+        return self.label or str(self.value)

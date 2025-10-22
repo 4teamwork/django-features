@@ -9,6 +9,7 @@ class Address(CustomFieldBaseModel):
     city = models.CharField(verbose_name="city", blank=True)
     country = models.CharField(verbose_name="country", blank=True)
     street = models.CharField(verbose_name="street", blank=True)
+    external_uid = models.UUIDField(verbose_name="external uid", null=True)
     zip_code = models.CharField(verbose_name="postal code", blank=True)
 
     target = GenericForeignKey("target_type", "target_id")

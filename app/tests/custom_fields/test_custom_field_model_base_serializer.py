@@ -69,7 +69,7 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             choice_field=True,
-            multiple_choice=True,
+            multiple=True,
         )
         self.choice_1 = CustomValueFactory(field=self.choice_field, value="2000-01-01")
         self.choice_2 = CustomValueFactory(field=self.choice_field, value="2001-01-01")
@@ -118,18 +118,18 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
                 "multiple_date_value": ["2000-01-01", "2001-01-01"],
                 "choice_value": {
                     "id": self.choice_1.id,
-                    "text": None,
+                    "label": None,
                     "value": "2000-01-01",
                 },
                 "multiple_choice_value": [
                     {
                         "id": self.multiple_choice_1.id,
-                        "text": None,
+                        "label": None,
                         "value": "2000-01-01",
                     },
                     {
                         "id": self.multiple_choice_2.id,
-                        "text": None,
+                        "label": None,
                         "value": "2001-01-01",
                     },
                 ],
@@ -149,8 +149,8 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             "integer_value": 42,
             "boolean_value": True,
             "multiple_date_value": ["2000-01-01", "2001-01-01"],
-            "choice_value_id": self.choice_1.id,
-            "multiple_choice_value_id": [
+            "choice_value": self.choice_1.id,
+            "multiple_choice_value": [
                 self.multiple_choice_1.id,
                 self.multiple_choice_2.id,
             ],
@@ -174,13 +174,13 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
         )
         self.assertEqual(
             instance.choice_value,
-            {"id": self.choice_1.id, "text": None, "value": "2000-01-01"},
+            {"id": self.choice_1.id, "label": None, "value": "2000-01-01"},
         )
         self.assertEqual(
             instance.multiple_choice_value,
             [
-                {"id": self.multiple_choice_1.id, "text": None, "value": "2000-01-01"},
-                {"id": self.multiple_choice_2.id, "text": None, "value": "2001-01-01"},
+                {"id": self.multiple_choice_1.id, "label": None, "value": "2000-01-01"},
+                {"id": self.multiple_choice_2.id, "label": None, "value": "2001-01-01"},
             ],
         )
 
@@ -214,18 +214,18 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
                 "multiple_date_value": ["2000-01-01", "2001-01-01"],
                 "choice_value": {
                     "id": self.choice_1.id,
-                    "text": None,
+                    "label": None,
                     "value": "2000-01-01",
                 },
                 "multiple_choice_value": [
                     {
                         "id": self.multiple_choice_1.id,
-                        "text": None,
+                        "label": None,
                         "value": "2000-01-01",
                     },
                     {
                         "id": self.multiple_choice_2.id,
-                        "text": None,
+                        "label": None,
                         "value": "2001-01-01",
                     },
                 ],
@@ -246,25 +246,20 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             "multiple_date_value": ["2002-01-01", "2003-01-01"],
             "choice_value": {
                 "id": self.choice_2.id,
-                "text": None,
+                "label": None,
                 "value": "2000-01-01",
             },
-            "choice_value_id": self.choice_2.id,
             "multiple_choice_value": [
                 {
                     "id": self.multiple_choice_1.id,
-                    "text": None,
+                    "label": None,
                     "value": "2000-01-01",
                 },
                 {
                     "id": self.multiple_choice_3.id,
-                    "text": None,
+                    "label": None,
                     "value": "2002-01-01",
                 },
-            ],
-            "multiple_choice_value_id": [
-                self.multiple_choice_1.id,
-                self.multiple_choice_3.id,
             ],
         }
 
@@ -289,13 +284,13 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
         )
         self.assertEqual(
             instance.choice_value,
-            {"id": self.choice_2.id, "text": None, "value": "2001-01-01"},
+            {"id": self.choice_2.id, "label": None, "value": "2001-01-01"},
         )
         self.assertEqual(
             instance.multiple_choice_value,
             [
-                {"id": self.multiple_choice_1.id, "text": None, "value": "2000-01-01"},
-                {"id": self.multiple_choice_3.id, "text": None, "value": "2002-01-01"},
+                {"id": self.multiple_choice_1.id, "label": None, "value": "2000-01-01"},
+                {"id": self.multiple_choice_3.id, "label": None, "value": "2002-01-01"},
             ],
         )
 
@@ -329,18 +324,18 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
                 "multiple_date_value": ["2000-01-01", "2001-01-01"],
                 "choice_value": {
                     "id": self.choice_1.id,
-                    "text": None,
+                    "label": None,
                     "value": "2000-01-01",
                 },
                 "multiple_choice_value": [
                     {
                         "id": self.multiple_choice_1.id,
-                        "text": None,
+                        "label": None,
                         "value": "2000-01-01",
                     },
                     {
                         "id": self.multiple_choice_2.id,
-                        "text": None,
+                        "label": None,
                         "value": "2001-01-01",
                     },
                 ],
@@ -352,7 +347,7 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             "char_value": "Some char value2",
             "datetime_value": "2000-01-02T12:30:00+01:00",
             "integer_value": 43,
-            "multiple_choice_value_id": [],
+            "multiple_choice_value": [],
         }
 
         serializer = PersonSerializer(self.person, data=data, partial=True)
@@ -374,7 +369,7 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
         )
         self.assertEqual(
             instance.choice_value,
-            {"id": self.choice_1.id, "text": None, "value": "2000-01-01"},
+            {"id": self.choice_1.id, "label": None, "value": "2000-01-01"},
         )
         self.assertEqual(instance.multiple_choice_value, [])
 

@@ -93,9 +93,6 @@ class CustomField(TimeStampedModel):
     identifier = models.SlugField(max_length=64, unique=True, db_index=True)
     label = models.CharField(verbose_name=_("Name"))
     multiple = models.BooleanField(verbose_name=_("Liste"), default=False)
-    multiple_choice = models.BooleanField(
-        verbose_name=_("Mehrfachauswahlfeld"), default=False
-    )
     order = models.PositiveSmallIntegerField(verbose_name=_("Reihenfolge"), default=0)
     required = models.BooleanField(verbose_name=_("Erforderlich"), default=False)
 
@@ -120,6 +117,14 @@ class CustomField(TimeStampedModel):
         return f"{self.label}"
 
     @property
+    def choices(self) -> list[tuple[str, str]]:
+        from django_features.custom_fields.models import CustomValue
+
+        if not self.choice_field:
+            return CustomValue.objects.none()
+        return CustomValue.objects.filter(field=self)
+
+    @property
     def output_field(self) -> models.Field:
         output_field = CustomField.TYPE_FIELD_MAP.get(self.field_type)
         if not output_field:
@@ -136,19 +141,16 @@ class CustomField(TimeStampedModel):
 
     @property
     def serializer_field(self) -> serializers.Field:
-        from django_features.custom_fields.serializers import CustomChoiceSerializer
+        from django_features.custom_fields.fields import ChoiceIdField
 
         if self.choice_field:
-            return CustomChoiceSerializer(
-                many=self.multiple_choice, read_only=True, required=False
-            )
+            return ChoiceIdField(field=self)
 
         serializer_field = self.TYPE_SERIALIZER_MAP.get(self.field_type)
         if serializer_field is None:
             raise ValueError(f"Unknown field type: {self.field_type}")
 
         params = {"allow_null": self.allow_null}
-
         if self.default and not self.required:
             params["default"] = self.default
         else:

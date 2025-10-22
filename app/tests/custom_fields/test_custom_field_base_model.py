@@ -244,7 +244,7 @@ class CustomFieldBaseModelTest(APITestCase):
             field_type=CustomField.FIELD_TYPES.CHAR,
             choice_field=True,
         )
-        choice_1 = CustomValueFactory(field=field, text="Choice 1", value="choice_1")
+        choice_1 = CustomValueFactory(field=field, label="Choice 1", value="choice_1")
 
         # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
         # because we created a new field
@@ -263,7 +263,7 @@ class CustomFieldBaseModelTest(APITestCase):
 
         self.assertEqual(choice_1, self.person.choice_value)
         self.assertEqual(
-            {"id": choice_1.id, "text": "Choice 1", "value": "choice_1"},
+            {"id": choice_1.id, "label": "Choice 1", "value": "choice_1"},
             Person.objects.first().choice_value,
         )
 
@@ -275,7 +275,7 @@ class CustomFieldBaseModelTest(APITestCase):
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             choice_field=True,
-            multiple_choice=True,
+            multiple=True,
         )
         choice_1 = CustomValueFactory(field=field, value="2000-01-01")
         choice_2 = CustomValueFactory(field=field, value="2001-01-01")
@@ -301,9 +301,9 @@ class CustomFieldBaseModelTest(APITestCase):
         )
         self.assertEqual(
             [
-                {"id": choice_1.id, "text": None, "value": "2000-01-01"},
-                {"id": choice_2.id, "text": None, "value": "2001-01-01"},
-                {"id": choice_3.id, "text": None, "value": "2002-01-01"},
+                {"id": choice_1.id, "label": None, "value": "2000-01-01"},
+                {"id": choice_2.id, "label": None, "value": "2001-01-01"},
+                {"id": choice_3.id, "label": None, "value": "2002-01-01"},
             ],
             Person.objects.first().multiple_choice_value,
         )

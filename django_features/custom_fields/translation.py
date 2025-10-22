@@ -11,4 +11,4 @@ class CustomFieldTranslationOptions(TranslationOptions):
 
 @register(models.CustomValue)
 class CustomChoiceTranslationOptions(TranslationOptions):
-    fields = ("text",)
+    fields = ("label",)

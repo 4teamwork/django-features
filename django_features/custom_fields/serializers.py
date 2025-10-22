@@ -5,21 +5,21 @@ from django.db import models
 from rest_framework import serializers
 from rest_framework.fields import empty
 
-from django_features.custom_fields.fields import ChoiceIdField
 from django_features.custom_fields.models import CustomField
+from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomValue
 
 
 class CustomChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomValue
-        fields = ["id", "text", "value"]
+        fields = ["id", "label", "value"]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         if isinstance(self.instance, CustomValue):
             field = self.instance.field
-            self.fields["value"] = CustomField.TYPE_FIELD_MAP[field.field_type](
+            self.fields["value"] = CustomField.TYPE_SERIALIZER_MAP[field.field_type](
                 allow_null=True, read_only=True, required=False
             )
 
@@ -42,26 +42,30 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             "label",
             "modified",
             "multiple",
-            "multiple_choice",
             "order",
         ]
 
     def get_choices(self, obj: CustomField) -> list:
-        if not obj.choice_field:
-            return []
-        return CustomChoiceSerializer(
-            CustomValue.objects.filter(field=obj), many=True
-        ).data
+        return CustomChoiceSerializer(obj.choices, many=True).data
 
 
 CustomFieldData = namedtuple(
     "CustomFieldData",
-    ["id", "identifier", "choice_field", "multiple_choice"],
+    [
+        "id",
+        "identifier",
+        "choices",
+        "choice_field",
+        "multiple",
+        "serializer_field",
+    ],
 )
 
 
 class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     _custom_fields: list[CustomFieldData] = []
+    _unique_choice_field = "id"
+    _write_only_serializer = False
 
     class Meta:
         abstract = True
@@ -73,9 +77,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         instance: Any = None,
         data: Any = empty,
         exclude_custom_fields: bool = False,
+        write_only_serializer: bool = False,
         **kwargs: Any,
     ) -> None:
         self.exclude_custom_fields: bool = exclude_custom_fields
+        self.write_only_serializer = (
+            write_only_serializer or self._write_only_serializer
+        )
         super().__init__(instance, data, **kwargs)
 
     @property
@@ -94,25 +102,26 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 CustomFieldData(
                     field.id,
                     field.identifier,
+                    field.choices,
                     field.choice_field,
-                    field.multiple_choice,
+                    field.multiple,
+                    field.serializer_field,
                 )
             )
+            serialized_field = field.serializer_field
             if field.choice_field:
-                fields[f"{field.identifier}_id"] = ChoiceIdField(
-                    required=field.required, write_only=True
-                )
-            fields[field.identifier] = field.serializer_field
+                serialized_field.set_unique_field(self._unique_choice_field)
+            fields[field.identifier] = serialized_field
         return fields
 
     def create(self, validated_data: dict) -> Any:
         custom_value_instances: list[CustomValue] = []
         choices: list[CustomValue] = []
         for field in self._custom_fields:
+            value = validated_data.pop(field.identifier, None)
+            if value is None:
+                continue
             if not field.choice_field:
-                value = validated_data.pop(field.identifier, None)
-                if not value:
-                    continue
                 custom_value_instances.append(
                     CustomValue(
                         field_id=field.id,
@@ -120,10 +129,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     )
                 )
             else:
-                value = validated_data.pop(f"{field.identifier}_id", None)
-                if not value:
-                    continue
-                if field.multiple_choice:
+                if field.multiple:
                     choices.extend(value)
                 else:
                     choices.append(value)
@@ -134,12 +140,34 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             instance.custom_values.set(custom_values)
         return instance
 
+    def _create_or_update_custom_value(
+        self, instance: CustomFieldBaseModel, field: CustomFieldData, value: Any
+    ) -> None:
+        serializer_field = field.serializer_field
+        serializer_field.run_validators(value)
+        value = serializer_field.to_representation(value)
+        try:
+            value_object = instance.custom_values.select_related("field").get(
+                field_id=field.id
+            )
+            value_object.value = value
+            value_object.save()
+        except CustomValue.DoesNotExist:
+            value_object = CustomValue.objects.create(field_id=field.id, value=value)
+            instance.custom_values.add(value_object)
+
     def update(self, instance: Any, validated_data: dict) -> Any:
         for field in self._custom_fields:
+            if field.identifier not in validated_data:
+                continue
             value = validated_data.pop(field.identifier, None)
             if field.choice_field:
-                value = validated_data.pop(f"{field.identifier}_id", None)
-            if value is not None:
-                setattr(instance, field.identifier, value)
+                instance.custom_values.remove(*field.choices)
+                if field.multiple:
+                    instance.custom_values.add(*value)
+                else:
+                    instance.custom_values.add(value)
+            else:
+                self._create_or_update_custom_value(instance, field, value)
         instance = super().update(instance, validated_data)
         return instance
