@@ -1,4 +1,13 @@
 
+2025.4.0 (2025-10-22)
+---------------------
+
+New features:
+
+- Add new custom fields feature. (`TI-2893 <https://4teamwork.atlassian.net/browse/TI-2893>`_)
+- Implements the MappingValidationMixin to validate nested field mappings and MappingSerializer to import models with nested mapping. (`TI-2893 <https://4teamwork.atlassian.net/browse/TI-2893>`_)
+
+
 2025.3.1 (2025-10-10)
 ---------------------
 
