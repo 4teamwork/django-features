@@ -117,6 +117,7 @@ class MappingValidationMixin:
         for name, field in info.fields.items():
             if (
                 field.null is False
+                and field.blank is False
                 and field.default == NOT_PROVIDED
                 and (
                     (name not in field_mapping.values() and self.validate_value)
