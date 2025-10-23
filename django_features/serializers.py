@@ -12,7 +12,6 @@ from django_features.fields import UUIDRelatedField
 
 
 class BaseMappingSerializer(CustomFieldBaseModelSerializer):
-    related_fields: set[str] = set()
     relation_separator: str = "."
     serializer_related_field = UUIDRelatedField
     serializer_related_fields: dict[str, Any] = {}
@@ -30,6 +29,7 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
         )
         super().__init__(*args, **kwargs)
         self.exclude: list[str] = []
+        self.related_fields: set[str] = set()
 
     @property
     def mapping(self) -> dict[str, dict[str, Any]]:
