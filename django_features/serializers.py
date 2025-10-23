@@ -194,25 +194,42 @@ class MappingSerializer(BaseMappingSerializer):
         mapped_data = self.map_data(data)
         super().__init__(instance, data=mapped_data, **kwargs)
 
-    def _get_nested_data(self, field_path: list[str], data: Any) -> Any:
+    def _get_nested_data(self, field_path: list[str], data: Any) -> tuple[Any, bool]:
         field_name = field_path[0]
-        if data is not None and field_name in data:
-            if len(field_path) > 1:
-                return self._get_nested_data(field_path[1:], data[field_name])
-            else:
-                return data[field_name]
-        return None
+        if not isinstance(data, dict):
+            return None, False
+        value = data.get(field_name, None)
+        if len(field_path) > 1:
+            return self._get_nested_data(field_path[1:], value)
+        return value, True
 
-    def map_data(self, data: Any) -> Any:
+    def _get_data_with_internal_key(
+        self, field_path: list[str], parent_data: dict[str, Any] | Any, value: Any
+    ) -> dict[str, Any] | Any:
+        field_name = field_path[0]
+        if len(field_path) > 1:
+            nested_data = parent_data.get(field_name, {})
+            value = self._get_data_with_internal_key(field_path[1:], nested_data, value)
+            if field_name in parent_data:
+                nested_data.update(value)
+                parent_data.update({field_name: nested_data})
+                return parent_data
+        return {field_name: value}
+
+    def map_data(self, initial_data: Any) -> Any:
+        data: dict[str, Any] = {}
         for external_name, internal_name in self.model_mapping.items():
-            field_path = external_name.split(self.relation_separator)
-            value = self._get_nested_data(field_path, data)
-            if value is None:
+            external_field_path = external_name.split(self.relation_separator)
+            value, found = self._get_nested_data(external_field_path, initial_data)
+            if not found:
                 continue
             format_func = getattr(self, f"{self._format_prefix}_{internal_name}", None)
             if format_func is not None:
                 value = format_func(value)
-            data[internal_name] = value
+            internal_field_path = internal_name.split(self.relation_separator)
+            data.update(
+                self._get_data_with_internal_key(internal_field_path, data, value)
+            )
         return data
 
     @property
