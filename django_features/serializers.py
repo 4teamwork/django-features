@@ -11,14 +11,12 @@ from django_features.custom_fields.serializers import CustomFieldBaseModelSerial
 from django_features.fields import UUIDRelatedField
 
 
-class ExternalUUIDRelatedField(UUIDRelatedField):
-    default_uuid_field_name = "external_uid"
-
-
 class BaseMappingSerializer(CustomFieldBaseModelSerializer):
     related_fields: set[str] = set()
     relation_separator: str = "."
-    serializer_related_field = ExternalUUIDRelatedField
+    serializer_related_field = UUIDRelatedField
+    serializer_related_fields: dict[str, Any] = {}
+
     _write_only_serializer = True
 
     class Meta:
@@ -52,15 +50,16 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
         fields: dict[str, Any] = dict()
         nested_fields: dict[str, Any] = dict()
         nested_field_fields: dict[str, list[str]] = dict()
-        nested_field_data: dict[str, Any] = dict()
         for internal_name in self.mapping_fields:
             if internal_name in self.exclude:
                 continue
             split = internal_name.split(self.relation_separator)
             field_name = split[0]
             serializer_field = initial_fields.get(field_name)
-            if serializer_field is not None and len(split) == 1:
-                fields[internal_name] = serializer_field
+            if serializer_field is not None and (
+                field_name in self._declared_fields or len(split) == 1
+            ):
+                fields[field_name] = serializer_field
             else:
                 try:
                     field = self.model._meta.get_field(field_name)
@@ -68,27 +67,21 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
                     raise ValidationError(
                         f"Invalid field '{field_name}' for model {self.model}."
                     )
-
                 if len(split) > 1:
                     nested_field = self.relation_separator.join(split[1:])
                     if field_name not in nested_fields:
                         nested_fields[field_name] = field
-                    if field_name in nested_field_data:
-                        nested_field_data[field_name][nested_field] = self.initial_data[
-                            internal_name
-                        ]
-                    elif internal_name in self.initial_data:
-                        nested_field_data[field_name] = {
-                            nested_field: self.initial_data[internal_name]
-                        }
                     if field_name in nested_field_fields:
                         nested_field_fields[field_name].append(nested_field)
                     else:
                         nested_field_fields[field_name] = [nested_field]
                 elif isinstance(field, GenericRelation):
                     self.related_fields.add(field_name)
+                    serializer_related_field = self.serializer_related_fields.get(
+                        internal_name, self.serializer_related_field
+                    )
                     fields[internal_name] = ManyRelatedField(
-                        child_relation=ExternalUUIDRelatedField(
+                        child_relation=serializer_related_field(
                             field=field, required=False
                         ),
                         required=False,
@@ -96,12 +89,11 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
         for field_name, field in nested_fields.items():
             self.related_fields.add(field_name)
             fields[field_name] = NestedMappingSerializer(
-                data=nested_field_data[field_name],
+                data=self.initial_data.get(field_name),
                 exclude=[*self.exclude, self.model.__name__.lower()],
                 field=field,
                 nested_fields=nested_field_fields[field_name],
                 parent_mapping=self.mapping,
-                required=False,
             )
         missing_declared_fields = self._declared_fields.keys() - fields.keys()
         fields.update(
@@ -114,13 +106,12 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
         relations_to_save: dict[str, Any] = {}
         for field in self.related_fields:
             value = validated_data.pop(field, None)
-            if value is not None:
+            serializer = self.fields.get(field)
+            if isinstance(serializer, NestedMappingSerializer):
+                serializer.is_valid(raise_exception=True)
+                relations_to_save[field] = serializer.save()
+            elif value is not None:
                 relations_to_save[field] = value
-            else:
-                serializer = self.fields.get(field)
-                if serializer is not None:
-                    serializer.is_valid(raise_exception=True)
-                    relations_to_save[field] = serializer.save()
         instance = super().create(validated_data)
         for field, value in relations_to_save.items():
             model_field = self.model._meta.get_field(field)
@@ -136,8 +127,8 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
     ) -> models.Model:
         for field in self.related_fields:
             value = validated_data.pop(field, None)
-            if value is None:
-                serializer = self.fields[field]
+            serializer = self.fields.get(field)
+            if isinstance(serializer, NestedMappingSerializer):
                 serializer.is_valid(raise_exception=True)
                 value = serializer.save()
             model_field = self.model._meta.get_field(field)
