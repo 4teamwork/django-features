@@ -50,6 +50,7 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
         fields: dict[str, Any] = dict()
         nested_fields: dict[str, Any] = dict()
         nested_field_fields: dict[str, list[str]] = dict()
+        self.related_fields: set[str] = set()
         for internal_name in self.mapping_fields:
             if internal_name in self.exclude:
                 continue
