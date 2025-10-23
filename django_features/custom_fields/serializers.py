@@ -96,6 +96,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         fields = super().get_fields()
         if self.exclude_custom_fields:
             return fields
+        self._custom_fields = []
         custom_fields = list(CustomField.objects.for_model(self.model))
         for field in custom_fields:
             self._custom_fields.append(

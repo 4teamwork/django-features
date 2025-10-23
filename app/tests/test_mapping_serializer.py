@@ -5,6 +5,7 @@ from datetime import timezone
 from constance.test import override_config
 from django.contrib.contenttypes.models import ContentType
 
+from app.models import ElectionDistrict
 from app.models import Municipality
 from app.models import Person
 from app.serializers.person import PersonMappingSerializer
@@ -12,8 +13,10 @@ from app.tests import APITestCase
 from app.tests.custom_fields.factories import CustomFieldFactory
 from app.tests.custom_fields.factories import CustomValueFactory
 from app.tests.factories import AddressFactory
+from app.tests.factories import ElectionDistrictFactory
 from app.tests.factories import PersonFactory
 from django_features.custom_fields.models import CustomField
+from django_features.custom_fields.models import CustomValue
 
 
 MODEL_MAPPING_FIELD = {
@@ -30,6 +33,7 @@ MODEL_MAPPING_FIELD = {
         "external_choice_field": "choice_value",
         "external_multiple_choice_field": "multiple_choice_value",
         "external_municipality_title": "place_of_residence.title",
+        "external_election_district_title": "election_district",
         "external_addresses": "addresses",
     }
 }
@@ -42,49 +46,49 @@ class MappingSerializerTestCase(APITestCase):
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
 
-        self.char_field = CustomFieldFactory(
+        self.char_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="char_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,
         )
-        self.text_field = CustomFieldFactory(
+        self.text_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="text_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.TEXT,
         )
-        self.date_field = CustomFieldFactory(
+        self.date_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="date_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
         )
-        self.datetime_field = CustomFieldFactory(
+        self.datetime_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="datetime_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATETIME,
         )
-        self.integer_field = CustomFieldFactory(
+        self.integer_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="integer_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.INTEGER,
         )
-        self.boolean_field = CustomFieldFactory(
+        self.boolean_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="boolean_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.BOOLEAN,
         )
-        self.multiple_date_field = CustomFieldFactory(
+        self.multiple_date_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="multiple_date_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             multiple=True,
         )
-        self.choice_field = CustomFieldFactory(
+        self.choice_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="choice_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             choice_field=True,
         )
-        self.multiple_choice_field = CustomFieldFactory(
+        self.multiple_choice_field: CustomField = CustomFieldFactory(  # type: ignore
             identifier="multiple_choice_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
@@ -92,16 +96,18 @@ class MappingSerializerTestCase(APITestCase):
             multiple=True,
         )
 
-        self.choice_1 = CustomValueFactory(field=self.choice_field, value="2000-01-01")
-        self.choice_2 = CustomValueFactory(field=self.choice_field, value="2001-01-01")
+        self.choice_1: CustomValue = CustomValueFactory(field=self.choice_field, value="2000-01-01")  # type: ignore
+        self.choice_2: CustomValue = CustomValueFactory(  # type: ignore
+            field=self.choice_field, value="2001-01-01"
+        )
 
-        self.multiple_choice_1 = CustomValueFactory(
+        self.multiple_choice_1: CustomValue = CustomValueFactory(  # type: ignore
             field=self.multiple_choice_field, value="2000-01-01"
         )
-        self.multiple_choice_2 = CustomValueFactory(
+        self.multiple_choice_2: CustomValue = CustomValueFactory(  # type: ignore
             field=self.multiple_choice_field, value="2001-01-01"
         )
-        self.multiple_choice_3 = CustomValueFactory(
+        self.multiple_choice_3: CustomValue = CustomValueFactory(  # type: ignore
             field=self.multiple_choice_field, value="2002-01-01"
         )
 
@@ -111,6 +117,8 @@ class MappingSerializerTestCase(APITestCase):
 
     @override_config(MODEL_MAPPING_FIELD=MODEL_MAPPING_FIELD)
     def test_mapping_serializer_create(self) -> None:
+        election_district = ElectionDistrictFactory(title="Koeniz")
+
         data = {
             "external_firstname": "Hugo",
             "external_lastname": "Boss",
@@ -124,6 +132,7 @@ class MappingSerializerTestCase(APITestCase):
             "external_choice_field": "2000-01-01",
             "external_multiple_choice_field": ["2000-01-01", "2001-01-01"],
             "external_municipality_title": "Muri",
+            "external_election_district_title": "Koeniz",
             "external_addresses": [
                 self.address_1.external_uid,
                 self.address_2.external_uid,
@@ -164,13 +173,21 @@ class MappingSerializerTestCase(APITestCase):
 
         self.assertEqual("Muri", instance.place_of_residence.title)
         self.assertEqual(1, Municipality.objects.count())
+
+        self.assertEqual(election_district, instance.election_district)
+        self.assertEqual(1, ElectionDistrict.objects.count())
+
         self.assertEqual(2, instance.addresses.count())
         self.assertEqual(instance, instance.addresses.first().target)
         self.assertEqual(instance, instance.addresses.last().target)
 
     @override_config(MODEL_MAPPING_FIELD=MODEL_MAPPING_FIELD)
     def test_mapping_serializer_update(self) -> None:
-        person: Person = PersonFactory(firstname="old", lastname="old")  # type: ignore
+        old_election_district = ElectionDistrictFactory(title="Old")
+        election_district = ElectionDistrictFactory(title="Koeniz")
+        person: Person = PersonFactory(  # type: ignore
+            firstname="old", lastname="old", election_district=old_election_district
+        )
 
         person.refresh_with_custom_fields()
 
@@ -187,6 +204,7 @@ class MappingSerializerTestCase(APITestCase):
             "external_choice_field": "2001-01-01",
             "external_multiple_choice_field": ["2000-01-01", "2002-01-01"],
             "external_municipality_title": "Koeniz",
+            "external_election_district_title": "Koeniz",
             "external_addresses": [
                 self.address_1.external_uid,
                 self.address_3.external_uid,
@@ -227,6 +245,10 @@ class MappingSerializerTestCase(APITestCase):
 
         self.assertEqual("Koeniz", instance.place_of_residence.title)
         self.assertEqual(1, Municipality.objects.count())
+
+        self.assertEqual(election_district, instance.election_district)
+        self.assertEqual(2, ElectionDistrict.objects.count())
+
         self.assertEqual(2, instance.addresses.count())
         self.assertEqual(person, instance.addresses.first().target)
         self.assertEqual(person, instance.addresses.last().target)
