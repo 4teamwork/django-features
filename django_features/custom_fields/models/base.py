@@ -124,8 +124,6 @@ class CustomFieldTypeBaseModel(TimeStampedModel):
 
 class CustomFieldBaseModel(TimeStampedModel):
     _custom_field_type_attr: str | None = None
-    _custom_values_to_save: list[CustomValue] = []
-    _custom_values_to_remove: list[CustomValue] = []
 
     custom_values = models.ManyToManyField(
         blank=True,
@@ -137,15 +135,20 @@ class CustomFieldBaseModel(TimeStampedModel):
     class Meta:
         abstract = True
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._custom_values_to_save: list[CustomValue] = []
+        self._custom_values_to_remove: list[CustomValue] = []
+
     def save(self, **kwargs: Any) -> None:
-        super().save(**kwargs)
+        super().save(**kwargs)  # type: ignore
         if self._custom_values_to_remove:
             self.custom_values.remove(*self._custom_values_to_remove)
 
         _custom_values_to_add: set[CustomValue] = set()
         existing_custom_values = self.custom_values.all()
         for value in self._custom_values_to_save:
-            value.save()
+            value.save()  # type: ignore
             if value not in existing_custom_values:
                 _custom_values_to_add.add(value)
         if _custom_values_to_add:
