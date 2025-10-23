@@ -4,6 +4,7 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import NOT_PROVIDED
 from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
 
@@ -230,7 +231,7 @@ class MappingSerializer(BaseMappingSerializer):
                 else:
                     try:
                         field = self.model._meta.get_field(internal_field_path[0])
-                        if not field.null and field.default is None:
+                        if not field.null and field.default != NOT_PROVIDED:
                             continue
                     except FieldDoesNotExist:
                         pass
