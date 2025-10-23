@@ -8,12 +8,12 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 
-class UUIDRelatedField(serializers.RelatedField):
+class RelatedField(serializers.RelatedField):
     """
     A relation field which expects an uid to be present on the related model for lookup and representation.
     """
 
-    default_uuid_field_name = "uid"
+    default_related_field_name = "id"
 
     default_error_messages = {
         "does_not_exist": _("Objekt existiert nicht."),
@@ -24,12 +24,14 @@ class UUIDRelatedField(serializers.RelatedField):
         self,
         field: models.Field | None = None,
         queryset: QuerySet | None = None,
-        uuid_field_name: str | None = None,
+        related_field_name: str | None = None,
+        creation: bool = True,
         **kwargs: Any,
     ) -> None:
+        self.creation = creation
         self.field = field
         self.queryset = queryset
-        self.uuid_field_name = uuid_field_name or self.default_uuid_field_name
+        self.related_field_name = related_field_name or self.default_related_field_name
         super().__init__(**kwargs)
 
     def get_field(self) -> models.Field:
@@ -53,16 +55,16 @@ class UUIDRelatedField(serializers.RelatedField):
 
     def to_representation(self, related_obj: models.Model) -> None | str:
         """
-        Get the UID of the related object; format it as UID.
+        Get the related value of the object; format it as UID.
         """
         if not related_obj:
             return None
-        related_uid = getattr(related_obj, self.uuid_field_name)
-        if related_uid is None:
+        related_field = getattr(related_obj, self.related_field_name, None)
+        if related_field is None and not self.required:
             raise AttributeError(
                 f"No field named 'UID' defined for relation to {self.field_name} on {related_obj}"
             )
-        return serializers.UUIDField().to_representation(related_uid)
+        return related_field
 
     def to_internal_value(self, data: str) -> models.Model | None:
         """
@@ -70,14 +72,18 @@ class UUIDRelatedField(serializers.RelatedField):
         """
         if not data and not self.required:
             return None
-        uid = serializers.UUIDField().to_internal_value(data)
         try:
-            return self.get_queryset().get(**{self.uuid_field_name: uid})
+            return self.get_queryset().get(**{self.related_field_name: data})
         except ObjectDoesNotExist as e:
-            raise ValidationError(
-                f"Object {self.get_field().related_model} with uid {uid} does not exist: {e}"
-            )
+            if self.required:
+                raise ValidationError(
+                    f"Object {self.get_field().related_model} with {self.related_field_name} {data} "
+                    f"does not exist: {e}"
+                )
+            else:
+                return None
         except (TypeError, ValueError) as e:
             raise ValidationError(
-                f"The data {uid} for model {self.get_field().related_model} has an incorrect type {type(data).__name__}: {e}"
+                f"The data {data} for model {self.get_field().related_model} has an incorrect type "
+                f"{type(data).__name__}: {e}"
             )
