@@ -90,6 +90,8 @@ class RelatedField(serializers.RelatedField):
 
 
 class UUIDRelatedField(RelatedField):
+    default_related_field_name = "uid"
+
     def to_representation(self, related_obj: models.Model) -> None | str:
         _ = super().to_representation(related_obj)
         return serializers.UUIDField().to_representation(related_obj)
