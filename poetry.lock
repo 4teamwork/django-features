@@ -1135,7 +1135,7 @@ version = "0.2"
 description = "Plucks values from an iterable."
 optional = false
 python-versions = "*"
-groups = ["dev"]
+groups = ["main"]
 files = [
     {file = "pluck-0.2.tar.gz", hash = "sha256:2a84a60ee6681b933d9b6757b3febbde4a200f2f6f65d396e214ad4ecab2efdf"},
 ]
@@ -1742,4 +1742,4 @@ towncrier = ">=19.9.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12, <4"
-content-hash = "81c49e0e5a94baa1bc0dcd233bd202c8c7a2a728e4c1fbbe8e72837699bff057"
+content-hash = "6e8b4bc9ef672b6855d3f0235cbd63adc65c0cd20156d6e4a0cb9c0fd4eb147d"
