@@ -88,13 +88,17 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
                         required=False,
                     )
         for field_name, field in nested_fields.items():
+            nested_data = self.initial_data.get(field_name)
+            if not isinstance(nested_data, dict):
+                continue
             self.related_fields.add(field_name)
             fields[field_name] = NestedMappingSerializer(
-                data=self.initial_data.get(field_name),
+                data=nested_data,
                 exclude=[*self.exclude, self.model.__name__.lower()],
                 field=field,
                 nested_fields=nested_field_fields[field_name],
                 parent_mapping=self.mapping,
+                required=False,
             )
         missing_declared_fields = self._declared_fields.keys() - fields.keys()
         fields.update(
