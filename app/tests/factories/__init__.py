@@ -32,6 +32,15 @@ class PersonFactory(BaseFactory):
     email = "john.doe@example.com"
 
 
+class ElectionDistrictFactory(BaseFactory):
+    class Meta:
+        model = models.ElectionDistrict
+
+    uid = LazyFunction(lambda: uuid.uuid4())  # type: ignore
+    number = "1"
+    title = "Election District 1"
+
+
 class AddressFactory(BaseFactory):
     class Meta:
         model = models.Address

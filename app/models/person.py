@@ -35,6 +35,14 @@ class Person(CustomFieldBaseModel):
         verbose_name="Place of residence",
         related_name="persons",
     )
+    election_district = models.ForeignKey(
+        "ElectionDistrict",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        verbose_name="Election district",
+        related_name="persons",
+    )
 
     class Meta:
         verbose_name = "Person"
