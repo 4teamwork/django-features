@@ -1,4 +1,12 @@
 
+2025.5.0 (2025-10-23)
+---------------------
+
+Other changes:
+
+- Improve MappingSerializer and add option for more related fields. (`TI-2893 <https://4teamwork.atlassian.net/browse/TI-2893>`_)
+
+
 2025.4.3 (2025-10-22)
 ---------------------
 
