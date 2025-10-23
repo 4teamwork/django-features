@@ -87,3 +87,19 @@ class RelatedField(serializers.RelatedField):
                 f"The data {data} for model {self.get_field().related_model} has an incorrect type "
                 f"{type(data).__name__}: {e}"
             )
+
+
+class UUIDRelatedField(RelatedField):
+    def to_representation(self, related_obj: models.Model) -> None | str:
+        _ = super().to_representation(related_obj)
+        return serializers.UUIDField().to_representation(related_obj)
+
+    def to_internal_value(self, data: str) -> models.Model | None:
+        uuid = data
+        if uuid:
+            uuid = serializers.UUIDField().to_internal_value(data)
+        return super().to_internal_value(uuid)
+
+
+class ExternalUUIDRelatedField(UUIDRelatedField):
+    default_related_field_name = "external_uid"
