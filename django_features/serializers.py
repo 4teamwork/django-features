@@ -183,6 +183,7 @@ class MappingSerializer(BaseMappingSerializer):
         data: Any = empty,
         **kwargs: Any,
     ) -> None:
+        self.instance = instance
         mapped_data = self.map_data(data)
         super().__init__(instance, data=mapped_data, **kwargs)
 
@@ -219,6 +220,16 @@ class MappingSerializer(BaseMappingSerializer):
             if format_func is not None:
                 value = format_func(value)
             internal_field_path = internal_name.split(self.relation_separator)
+            if value is None:
+                if self.instance is None:
+                    continue
+                else:
+                    try:
+                        field = self.model._meta.get_field(internal_field_path[0])
+                        if not field.null and field.default is None:
+                            continue
+                    except FieldDoesNotExist:
+                        pass
             data.update(
                 self._get_data_with_internal_key(internal_field_path, data, value)
             )
