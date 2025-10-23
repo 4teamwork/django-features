@@ -20,7 +20,7 @@ from django_features.custom_fields.models import CustomValue
 
 
 MODEL_MAPPING_FIELD = {
-    "person": {
+    "app.person": {
         "external_firstname": "firstname",
         "external_lastname": "lastname",
         "external_char_field": "char_value",

@@ -249,4 +249,8 @@ class MappingSerializer(BaseMappingSerializer):
         mapping = getattr(self, "mapping", None)
         if mapping is None:
             raise ValueError("Mapping must be set")
-        return mapping.get(self.model.__name__.lower(), {})
+        for key_path in mapping.keys():
+            key = key_path.split(self.relation_separator)[-1]
+            if key.lower() == self.model.__name__.lower():
+                return mapping.get(key_path, {})
+        return {}
