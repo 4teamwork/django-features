@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db.models import Model
+from django.db.models.fields import NOT_PROVIDED
 from django.db.models.fields.related import RelatedField
 from rest_framework.utils.model_meta import get_field_info
 
@@ -116,11 +117,10 @@ class MappingValidationMixin:
         for name, field in info.fields.items():
             if (
                 field.null is False
+                and field.default == NOT_PROVIDED
                 and (
-                    name not in field_mapping.values()
-                    and self.validate_value
-                    or name not in field_mapping.keys()
-                    and self.validate_key
+                    (name not in field_mapping.values() and self.validate_value)
+                    or (name not in field_mapping.keys() and self.validate_key)
                 )
                 and (not hasattr(field, "auto_now_add") or field.auto_now_add is False)
                 and (not hasattr(field, "auto_now") or field.auto_now is False)
