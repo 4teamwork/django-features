@@ -201,7 +201,7 @@ class CustomFieldBaseModel(TimeStampedModel):
     def get_custom_attr(self, name: str) -> Any:
         if not hasattr(self, "custom_field_keys"):
             self.refresh_with_custom_fields()
-        return self.__getattribute__(name)
+        return getattr(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if hasattr(self, "custom_field_keys") and name in self.custom_field_keys:
