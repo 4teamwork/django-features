@@ -1,4 +1,12 @@
 
+2025.5.6 (2025-10-24)
+---------------------
+
+Bug fixes:
+
+- Handle None values when setting custom values. (`master <https://4teamwork.atlassian.net/browse/master>`_)
+
+
 2025.5.5 (2025-10-23)
 ---------------------
 
