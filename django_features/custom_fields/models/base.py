@@ -137,13 +137,18 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._custom_values_to_save: list[CustomValue] = []
-        self._custom_values_to_remove: list[CustomValue] = []
+        self.handle_custom_values = True
 
-    def save(self, **kwargs: Any) -> None:
-        super().save(**kwargs)  # type: ignore
+        self._custom_values_to_delete: list[int] = []
+        self._custom_values_to_remove: list[CustomValue] = []
+        self._custom_values_to_save: list[CustomValue] = []
+
+    def _save_custom_values(self) -> None:
         if self._custom_values_to_remove:
             self.custom_values.remove(*self._custom_values_to_remove)
+
+        if self._custom_values_to_delete:
+            self.custom_values.filter(id__in=self._custom_values_to_delete).delete()
 
         _custom_values_to_add: set[CustomValue] = set()
         existing_custom_values = self.custom_values.all()
@@ -156,12 +161,22 @@ class CustomFieldBaseModel(TimeStampedModel):
         self._custom_values_to_save = []
         self._custom_values_to_remove = []
 
+    def save(self, **kwargs: Any) -> None:
+        super().save(**kwargs)  # type: ignore
+        if self.handle_custom_values:
+            self._save_custom_values()
+
     def refresh_with_custom_fields(self) -> None:
+        if self.pk is None:
+            return
         self.__dict__.update(self.__class__.objects.get(pk=self.pk).__dict__)
 
     def _create_or_update_custom_value(self, field: str, value: Any) -> None:
         try:
             value_object = self.custom_values.select_related("field").get(field=field)
+            if value is None:
+                self._custom_values_to_delete.append(value_object.id)
+                return
         except CustomValue.DoesNotExist:
             value_object = CustomValue(field=field)
         serializer_field = value_object.field.serializer_field
@@ -171,6 +186,8 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     def _set_choice_value(self, field: CustomField, value: Any) -> None:
         self._custom_values_to_remove.extend(CustomValue.objects.filter(field=field))
+        if value is None:
+            return
         if field.multiple:
             # We expect a list for multiple choice fields, so we must extend the list with the items of the list
             self._custom_values_to_save.extend(value)
