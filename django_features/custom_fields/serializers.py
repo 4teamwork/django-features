@@ -152,11 +152,17 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             value_object = instance.custom_values.select_related("field").get(
                 field_id=field.id
             )
-            value_object.value = value
-            value_object.save()
+            if value is None:
+                value_object.delete()
+            else:
+                value_object.value = value
+                value_object.save()
         except CustomValue.DoesNotExist:
-            value_object = CustomValue.objects.create(field_id=field.id, value=value)
-            instance.custom_values.add(value_object)
+            if value is not None:
+                value_object = CustomValue.objects.create(
+                    field_id=field.id, value=value
+                )
+                instance.custom_values.add(value_object)
 
     def update(self, instance: Any, validated_data: dict) -> Any:
         for field in self._custom_fields:
@@ -165,6 +171,8 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             value = validated_data.pop(field.identifier, None)
             if field.choice_field:
                 instance.custom_values.remove(*field.choices)
+                if value is None:
+                    continue
                 if field.multiple:
                     instance.custom_values.add(*value)
                 else:
