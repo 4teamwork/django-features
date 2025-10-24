@@ -14,6 +14,7 @@ from django.db.models.functions import Cast
 from django.db.models.functions import JSONObject
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
+
 from django_features.custom_fields.models.field import CustomField
 from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.value import CustomValue
