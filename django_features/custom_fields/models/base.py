@@ -194,6 +194,11 @@ class CustomFieldBaseModel(TimeStampedModel):
         else:
             self._custom_values_to_save.append(value)
 
+    def set_custom_attr(self, name: str, value: Any) -> None:
+        if not hasattr(self, "custom_field_keys"):
+            self.refresh_with_custom_fields()
+        self.__setattr__(name, value)
+
     def __setattr__(self, name: str, value: Any) -> None:
         if hasattr(self, "custom_field_keys") and name in self.custom_field_keys:
             field = CustomField.objects.get(identifier=name)
