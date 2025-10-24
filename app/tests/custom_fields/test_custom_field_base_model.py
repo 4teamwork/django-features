@@ -2,8 +2,6 @@ from datetime import date
 from datetime import datetime
 from datetime import timezone
 
-from django.contrib.contenttypes.models import ContentType
-
 from app.models import Person
 from app.models import PersonType
 from app.tests import APITestCase
@@ -11,6 +9,7 @@ from app.tests.custom_fields.factories import CustomFieldFactory
 from app.tests.custom_fields.factories import CustomValueFactory
 from app.tests.factories import PersonFactory
 from app.tests.factories import PersonTypeFactory
+from django.contrib.contenttypes.models import ContentType
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomValue
 
@@ -420,3 +419,19 @@ class CustomFieldBaseModelTest(APITestCase):
         self.assertEqual("Char value", self.person.char_value)
         self.assertEqual("Char value", Person.objects.first().char_value)
         self.assertEqual("Char value", CustomValue.objects.first().value)
+
+    def test_custom_field_base_model_get_value_with_get_custom_attr(self) -> None:
+        field: CustomField = CustomFieldFactory(  # type: ignore
+            identifier="char_value",
+            content_type=self.person_ct,
+            field_type=CustomField.FIELD_TYPES.CHAR,
+        )
+        self.person.custom_values.add(
+            CustomValueFactory(field=field, value="Char value")
+        )
+
+        self.assertEqual(1, CustomValue.objects.count())
+        self.assertEqual(1, self.person.custom_values.count())
+
+        self.assertFalse(hasattr(self.person, "char_value"))
+        self.assertEqual("Char value", self.person.get_custom_attr("char_value"))

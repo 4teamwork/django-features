@@ -14,7 +14,6 @@ from django.db.models.functions import Cast
 from django.db.models.functions import JSONObject
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
-
 from django_features.custom_fields.models.field import CustomField
 from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.value import CustomValue
@@ -198,6 +197,11 @@ class CustomFieldBaseModel(TimeStampedModel):
         if not hasattr(self, "custom_field_keys"):
             self.refresh_with_custom_fields()
         self.__setattr__(name, value)
+
+    def get_custom_attr(self, name: str) -> Any:
+        if not hasattr(self, "custom_field_keys"):
+            self.refresh_with_custom_fields()
+        return self.__getattribute__(name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if hasattr(self, "custom_field_keys") and name in self.custom_field_keys:
