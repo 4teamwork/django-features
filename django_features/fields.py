@@ -37,8 +37,6 @@ class RelatedField(serializers.RelatedField):
     def get_field(self) -> models.Field:
         if self.field:
             field = self.field
-        elif self.queryset:
-            field = self.queryset.model._meta.get_field(self.field_name)
         elif self.parent.Meta and self.parent.Meta.model:
             field = self.parent.Meta.model._meta.get_field(self.field_name)
         else:
