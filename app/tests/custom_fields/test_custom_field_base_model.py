@@ -244,7 +244,7 @@ class CustomFieldBaseModelTest(APITestCase):
             field_type=CustomField.FIELD_TYPES.CHAR,
             choice_field=True,
         )
-        choice_1 = CustomValueFactory(field=field, label="Choice 1", value="choice_1")
+        choice_1: CustomValue = CustomValueFactory(field=field, label="Choice 1", value="choice_1")  # type: ignore
 
         # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
         # because we created a new field
@@ -277,9 +277,9 @@ class CustomFieldBaseModelTest(APITestCase):
             choice_field=True,
             multiple=True,
         )
-        choice_1 = CustomValueFactory(field=field, value="2000-01-01")
-        choice_2 = CustomValueFactory(field=field, value="2001-01-01")
-        choice_3 = CustomValueFactory(field=field, value="2002-01-01")
+        choice_1: CustomValue = CustomValueFactory(field=field, value="2000-01-01")  # type: ignore
+        choice_2: CustomValue = CustomValueFactory(field=field, value="2001-01-01")  # type: ignore
+        choice_3: CustomValue = CustomValueFactory(field=field, value="2002-01-01")  # type: ignore
 
         # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
         # because we created a new field
@@ -307,3 +307,116 @@ class CustomFieldBaseModelTest(APITestCase):
             ],
             Person.objects.first().multiple_choice_value,
         )
+
+    def test_custom_field_base_model_remove_text_value(self) -> None:
+        CustomFieldFactory(
+            identifier="text_value",
+            content_type=self.person_ct,
+            field_type=CustomField.FIELD_TYPES.TEXT,
+        )
+
+        # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
+        # because we created a new field
+        self.person.refresh_with_custom_fields()
+
+        self.assertEqual(0, CustomValue.objects.count())
+
+        self.person.text_value = "Text value"
+        self.person.save()
+
+        self.assertEqual(1, CustomValue.objects.count())
+        self.assertEqual("Text value", self.person.text_value)
+
+        self.person.text_value = None
+        self.person.save()
+
+        self.assertEqual(0, CustomValue.objects.count())
+        self.assertIsNone(self.person.text_value)
+
+    def test_custom_field_base_model_remove_choice_value(self) -> None:
+        field = CustomFieldFactory(
+            identifier="choice_value",
+            content_type=self.person_ct,
+            field_type=CustomField.FIELD_TYPES.CHAR,
+            choice_field=True,
+        )
+
+        # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
+        # because we created a new field
+        self.person.refresh_with_custom_fields()
+
+        choice_1: CustomValue = CustomValueFactory(field=field, label="Choice 1", value="choice_1")  # type: ignore
+        self.person.choice_value = choice_1
+        self.person.save()
+
+        self.assertEqual(1, CustomValue.objects.count())
+        self.assertEqual(1, self.person.custom_values.count())
+        self.assertEqual(choice_1, self.person.choice_value)
+
+        self.person.choice_value = None
+        self.person.save()
+
+        self.assertEqual(1, CustomValue.objects.count())
+        self.assertEqual(0, self.person.custom_values.count())
+        self.assertIsNone(self.person.choice_value)
+
+    def test_custom_field_base_model_remove_multiple_choice_value(
+        self,
+    ) -> None:
+        field = CustomFieldFactory(
+            identifier="multiple_choice_value",
+            content_type=self.person_ct,
+            field_type=CustomField.FIELD_TYPES.DATE,
+            choice_field=True,
+            multiple=True,
+        )
+        choice_1: CustomValue = CustomValueFactory(field=field, value="2000-01-01")  # type: ignore
+        CustomValueFactory(field=field, value="2001-01-01")
+        choice_3: CustomValue = CustomValueFactory(field=field, value="2002-01-01")  # type: ignore
+
+        # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
+        # because we created a new field
+        self.person.refresh_with_custom_fields()
+
+        self.person.multiple_choice_value = [choice_1, choice_3]
+        self.person.save()
+
+        self.assertEqual(3, CustomValue.objects.count())
+        self.assertEqual(2, self.person.custom_values.count())
+        self.assertEqual(
+            [
+                {"id": choice_1.id, "label": None, "value": "2000-01-01"},
+                {"id": choice_3.id, "label": None, "value": "2002-01-01"},
+            ],
+            Person.objects.first().multiple_choice_value,
+        )
+
+        self.person.multiple_choice_value = None
+        self.person.save()
+
+        self.assertEqual(3, CustomValue.objects.count())
+        self.assertEqual(0, self.person.custom_values.count())
+        self.assertIsNone(self.person.multiple_choice_value)
+
+    def test_custom_field_base_model_set_value_with_set_custom_attr(self) -> None:
+        CustomFieldFactory(
+            identifier="char_value",
+            content_type=self.person_ct,
+            field_type=CustomField.FIELD_TYPES.CHAR,
+        )
+
+        self.assertEqual(0, CustomValue.objects.count())
+        self.assertEqual(0, len(self.person._custom_values_to_save))
+
+        self.person.set_custom_attr("char_value", "Char value")
+
+        self.assertEqual(0, CustomValue.objects.count())
+        self.assertEqual(1, len(self.person._custom_values_to_save))
+        self.person.save()
+
+        self.assertEqual(1, CustomValue.objects.count())
+        self.assertEqual(0, len(self.person._custom_values_to_save))
+
+        self.assertEqual("Char value", self.person.char_value)
+        self.assertEqual("Char value", Person.objects.first().char_value)
+        self.assertEqual("Char value", CustomValue.objects.first().value)
