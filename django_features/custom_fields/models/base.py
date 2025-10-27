@@ -56,7 +56,7 @@ class CustomFieldModelBaseManager(models.Manager):
                     formated=Cast(
                         (
                             RawSQL(
-                                f"ARRAY(SELECT (jsonb_array_elements_text(value))::{field.sql_field})",
+                                "ARRAY(SELECT (jsonb_array_elements_text(value)))",
                                 [],
                             )
                             if field.multiple
