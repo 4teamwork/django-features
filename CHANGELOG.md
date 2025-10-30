@@ -1,4 +1,12 @@
 
+2025.5.14 (2025-10-30)
+----------------------
+
+Other changes:
+
+- Provide the unmapped data data in the mapping serializer. [TI-2994](https://4teamwork.atlassian.net/browse/TI-2994>)
+
+
 2025.5.13 (2025-10-30)
 ----------------------
 
