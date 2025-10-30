@@ -63,6 +63,7 @@ CustomFieldData = namedtuple(
 
 
 class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
+    _exclude_custom_fields = False
     _custom_fields: list[CustomFieldData] = []
     _unique_choice_field = "id"
     _write_only_serializer = False
@@ -76,13 +77,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self,
         instance: Any = None,
         data: Any = empty,
-        exclude_custom_fields: bool = False,
-        write_only_serializer: bool = False,
         **kwargs: Any,
     ) -> None:
-        self.exclude_custom_fields: bool = exclude_custom_fields
-        self.write_only_serializer = (
-            write_only_serializer or self._write_only_serializer
+        self.exclude_custom_fields: bool = kwargs.get(
+            "exclude_custom_fields", self._exclude_custom_fields
+        )
+        self.write_only_serializer = kwargs.get(
+            "write_only_serializer", self._write_only_serializer
         )
         super().__init__(instance, data, **kwargs)
 
