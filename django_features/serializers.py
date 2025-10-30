@@ -189,6 +189,7 @@ class MappingSerializer(BaseMappingSerializer):
         **kwargs: Any,
     ) -> None:
         self.instance = instance
+        self.unmapped_data = data
         mapped_data = self.map_data(data)
         super().__init__(instance, data=mapped_data, **kwargs)
 
