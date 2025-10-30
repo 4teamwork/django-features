@@ -1,0 +1,1 @@
+Fixes AttributeError when overriding the init function of the CustomFieldBaseModelSerializer because of the params. (`TI-2994 <https://4teamwork.atlassian.net/browse/TI-2994>`_)
