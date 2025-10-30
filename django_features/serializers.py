@@ -175,6 +175,7 @@ class NestedMappingSerializer(BaseMappingSerializer):
 
 
 class MappingSerializer(BaseMappingSerializer):
+    _default_prefix = "default"
     _format_prefix = "format"
 
     class Meta:
@@ -221,7 +222,13 @@ class MappingSerializer(BaseMappingSerializer):
             external_field_path = external_name.split(self.relation_separator)
             value, found = self._get_nested_data(external_field_path, initial_data)
             if not found:
-                continue
+                default_func = getattr(
+                    self, f"{self._default_prefix}_{internal_name}", None
+                )
+                if default_func is not None:
+                    value = default_func()
+                else:
+                    continue
             format_func = getattr(self, f"{self._format_prefix}_{internal_name}", None)
             if format_func is not None:
                 value = format_func(value)
