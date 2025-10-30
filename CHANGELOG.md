@@ -1,4 +1,12 @@
 
+2025.5.13 (2025-10-30)
+----------------------
+
+Bug fixes:
+
+- Fixes AttributeError when overriding the init function of the CustomFieldBaseModelSerializer because of the params. (`TI-2994 <https://4teamwork.atlassian.net/browse/TI-2994>`_)
+
+
 2025.5.12 (2025-10-27)
 ----------------------
 
