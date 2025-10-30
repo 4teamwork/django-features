@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ftw-django-features"
-version = "2025.5.13"
+version = "2025.5.14"
 description = "A collection of features used in our Django-based web applications."
 authors = ["4teamwork AG"]
 readme = "README.md"
