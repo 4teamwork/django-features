@@ -1,1 +1,1 @@
-0005_rename_text_to_label
+0006_add_filterable_to_customfield

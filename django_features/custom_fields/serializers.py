@@ -43,6 +43,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             "modified",
             "multiple",
             "order",
+            "filterable",
         ]
 
     def get_choices(self, obj: CustomField) -> list:
