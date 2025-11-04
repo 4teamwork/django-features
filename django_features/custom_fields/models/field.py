@@ -26,6 +26,9 @@ class CustomFieldQuerySet(models.QuerySet):
     def default_for(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.for_model(model).default()
 
+    def filterable(self) -> "CustomFieldQuerySet":
+        return self.filter(filterable=True)
+
 
 class FieldType:
     CHAR = "CHAR"
@@ -91,6 +94,10 @@ class CustomField(TimeStampedModel):
     field_type = models.CharField(verbose_name=_("Feldtyp"), choices=TYPE_CHOICES)
     hidden = models.BooleanField(verbose_name=_("Ausblenden"), default=False)
     identifier = models.SlugField(max_length=64, unique=True, db_index=True)
+    filterable = models.BooleanField(
+        verbose_name=_("Als Filter anbieten"),
+        default=False,
+    )
     label = models.CharField(verbose_name=_("Name"))
     multiple = models.BooleanField(verbose_name=_("Liste"), default=False)
     order = models.PositiveSmallIntegerField(verbose_name=_("Reihenfolge"), default=0)
@@ -143,18 +150,17 @@ class CustomField(TimeStampedModel):
     def serializer_field(self) -> serializers.Field:
         from django_features.custom_fields.fields import ChoiceIdField
 
+        params = {"allow_null": self.allow_null, "required": self.required}
         if self.choice_field:
-            return ChoiceIdField(field=self)
+            return ChoiceIdField(field=self, **params)
 
         serializer_field = self.TYPE_SERIALIZER_MAP.get(self.field_type)
         if serializer_field is None:
             raise ValueError(f"Unknown field type: {self.field_type}")
 
-        params = {"allow_null": self.allow_null}
         if self.default and not self.required:
+            params.pop("required")
             params["default"] = self.default
-        else:
-            params["required"] = self.required
 
         if self.multiple:
             return serializers.ListField(child=serializer_field(**params), **params)

@@ -43,13 +43,19 @@ class CustomFieldBaseAdmin(TranslationAdmin):
 
 @admin.register(models.CustomField)
 class CustomFieldAdmin(CustomFieldBaseAdmin):
-    list_display = ["id", "identifier", "__str__", "field_type"]
+    list_display = ["id", "identifier", "__str__", "field_type", "filterable"]
     list_display_links = (
         "id",
         "identifier",
         "__str__",
     )
-    list_filter = ("choice_field", "editable", "field_type", "content_type")
+    list_filter = (
+        "choice_field",
+        "editable",
+        "field_type",
+        "content_type",
+        "filterable",
+    )
     search_fields = ("label", "identifier")
 
 

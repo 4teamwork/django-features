@@ -32,6 +32,7 @@ class CustomFieldViewSetTest(APITestCase):
                 "modified": ANY,
                 "multiple": False,
                 "order": 0,
+                "filterable": False,
             },
             data,
         )
@@ -90,6 +91,7 @@ class CustomFieldViewSetTest(APITestCase):
                 "modified": ANY,
                 "multiple": False,
                 "order": 0,
+                "filterable": False,
             },
             data,
         )
