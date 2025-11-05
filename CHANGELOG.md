@@ -1,4 +1,12 @@
 
+2025.6.1 (2025-11-05)
+---------------------
+
+New features:
+
+- Benutzerdefinierte Felder sind jetzt filterbar. (`TI-2981 <https://4teamwork.atlassian.net/browse/TI-2981>`_)
+
+
 2025.6.0 (2025-10-30)
 ---------------------
 
