@@ -17,7 +17,16 @@ if not issubclass(CUSTOM_FIELD_BASE_MODEL_CLASS, TimeStampedModel):
         f"CUSTOM_FIELD_BASE_MODEL must inherit from TimeStampedModel, got {CUSTOM_FIELD_BASE_MODEL_CLASS}"
     )
 
-class CustomFieldQuerySet(models.QuerySet):
+CUSTOM_FIELD_BASE_QUERYSET_CLASS: type[models.QuerySet] = import_string(
+    settings.CUSTOM_FIELD_BASE_QUERYSET_CLASS
+)
+if not issubclass(CUSTOM_FIELD_BASE_QUERYSET_CLASS, models.QuerySet):
+    raise ValueError(
+        f"CUSTOM_FIELD_BASE_QUERYSET must inherit from models.QuerySet, got {CUSTOM_FIELD_BASE_QUERYSET_CLASS}"
+    )
+
+
+class CustomFieldQuerySet(CUSTOM_FIELD_BASE_QUERYSET_CLASS):
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
             content_type__app_label=model._meta.app_label,
