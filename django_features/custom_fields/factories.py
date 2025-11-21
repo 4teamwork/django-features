@@ -1,7 +1,7 @@
 from factory import SubFactory  # type: ignore
 
-from app.tests.system_message.factories import BaseFactory  # type: ignore
 from django_features.custom_fields import models
+from django_features.system_message.factories import BaseFactory  # type: ignore
 
 
 class CustomFieldFactory(BaseFactory):
