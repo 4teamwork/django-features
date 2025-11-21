@@ -1,11 +1,21 @@
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
+
+CUSTOM_FIELD_BASE_MODEL_CLASS: type[TimeStampedModel] = import_string(
+    settings.CUSTOM_FIELD_BASE_MODEL_CLASS
+)
+if not issubclass(CUSTOM_FIELD_BASE_MODEL_CLASS, TimeStampedModel):
+    raise ValueError(
+        f"CUSTOM_FIELD_BASE_MODEL must inherit from TimeStampedModel, got {CUSTOM_FIELD_BASE_MODEL_CLASS}"
+    )
 
 class CustomFieldQuerySet(models.QuerySet):
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
@@ -39,7 +49,7 @@ class FieldType:
     BOOLEAN = "BOOLEAN"
 
 
-class CustomField(TimeStampedModel):
+class CustomField(CUSTOM_FIELD_BASE_MODEL_CLASS):  # type: ignore
     FIELD_TYPES = FieldType
 
     TYPE_SQL_MAP = {
