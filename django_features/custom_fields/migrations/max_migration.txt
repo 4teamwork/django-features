@@ -1,1 +1,1 @@
-0006_add_filterable_to_customfield
+0007_customfield_is_public

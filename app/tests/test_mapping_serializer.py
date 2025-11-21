@@ -10,11 +10,11 @@ from app.models import Municipality
 from app.models import Person
 from app.serializers.person import PersonMappingSerializer
 from app.tests import APITestCase
-from app.tests.custom_fields.factories import CustomFieldFactory
-from app.tests.custom_fields.factories import CustomValueFactory
 from app.tests.factories import AddressFactory
 from app.tests.factories import ElectionDistrictFactory
 from app.tests.factories import PersonFactory
+from django_features.custom_fields.factories import CustomFieldFactory
+from django_features.custom_fields.factories import CustomValueFactory
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomValue
 

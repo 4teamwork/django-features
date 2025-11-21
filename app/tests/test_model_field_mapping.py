@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from app.models import Address
 from app.models import Person
 from app.tests import APITestCase
-from app.tests.custom_fields.factories import CustomFieldFactory
+from django_features.custom_fields.factories import CustomFieldFactory
 from django_features.custom_fields.models import CustomField
 from django_features.settings.fields import ModelFieldMapping
 

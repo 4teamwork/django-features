@@ -4,8 +4,8 @@ from django.contrib.contenttypes.models import ContentType
 
 from app.models import Person
 from app.tests import APITestCase
-from app.tests.custom_fields.factories import CustomFieldFactory
-from app.tests.custom_fields.factories import CustomValueFactory
+from django_features.custom_fields.factories import CustomFieldFactory
+from django_features.custom_fields.factories import CustomValueFactory
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.serializers import CustomFieldSerializer
 

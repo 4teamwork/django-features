@@ -159,4 +159,7 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
             },
         }
 
+    CUSTOM_FIELD_BASE_MODEL_CLASS = "app.web.publishable.PublishableModel"
+    CUSTOM_FIELD_BASE_QUERYSET_CLASS = "app.web.publishable.PublishableQuerySet"
+
     SECRET_KEY = values.SecretValue()

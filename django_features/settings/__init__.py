@@ -12,6 +12,9 @@ class BaseConfiguration(Configuration):
 
     CUSTOM_FIELD_APP = values.Value("django_features.custom_fields")
 
+    CUSTOM_FIELD_BASE_MODEL_CLASS = "django_extensions.db.models.TimeStampedModel"
+    CUSTOM_FIELD_BASE_QUERYSET_CLASS = "django.db.models.QuerySet"
+
     @property
     def CUSTOM_FIELDS_FEATURE(self) -> bool:
         return self.CUSTOM_FIELD_APP in self.INSTALLED_APPS

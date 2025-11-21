@@ -1,13 +1,32 @@
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
 
-class CustomFieldQuerySet(models.QuerySet):
+CUSTOM_FIELD_BASE_MODEL_CLASS: type[TimeStampedModel] = import_string(
+    settings.CUSTOM_FIELD_BASE_MODEL_CLASS
+)
+if not issubclass(CUSTOM_FIELD_BASE_MODEL_CLASS, TimeStampedModel):
+    raise ValueError(
+        f"CUSTOM_FIELD_BASE_MODEL must inherit from TimeStampedModel, got {CUSTOM_FIELD_BASE_MODEL_CLASS}"
+    )
+
+CUSTOM_FIELD_BASE_QUERYSET_CLASS: type[models.QuerySet] = import_string(
+    settings.CUSTOM_FIELD_BASE_QUERYSET_CLASS
+)
+if not issubclass(CUSTOM_FIELD_BASE_QUERYSET_CLASS, models.QuerySet):
+    raise ValueError(
+        f"CUSTOM_FIELD_BASE_QUERYSET must inherit from models.QuerySet, got {CUSTOM_FIELD_BASE_QUERYSET_CLASS}"
+    )
+
+
+class CustomFieldQuerySet(CUSTOM_FIELD_BASE_QUERYSET_CLASS):
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
             content_type__app_label=model._meta.app_label,
@@ -39,7 +58,7 @@ class FieldType:
     BOOLEAN = "BOOLEAN"
 
 
-class CustomField(TimeStampedModel):
+class CustomField(CUSTOM_FIELD_BASE_MODEL_CLASS):  # type: ignore
     FIELD_TYPES = FieldType
 
     TYPE_SQL_MAP = {
