@@ -188,18 +188,11 @@ class NestedMappingSerializer(BaseMappingSerializer):
         **kwargs: Any,
     ) -> None:
         self.exclude = exclude
-        self.nested_fields = nested_fields
-        self.parent_mapping = parent_mapping
+        self._mapping_fields = nested_fields
+        self._mapping = parent_mapping
         self.Meta.model = field.related_model
         super().__init__(*args, **kwargs)
 
-    @property
-    def mapping(self) -> dict[str, dict[str, Any]]:
-        return self.parent_mapping
-
-    @property
-    def mapping_fields(self) -> list[str]:
-        return self.nested_fields
 
 
 class MappingSerializer(BaseMappingSerializer):
