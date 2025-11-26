@@ -5,6 +5,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import NOT_PROVIDED
+from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
 
@@ -12,8 +13,50 @@ from django_features.custom_fields.serializers import CustomFieldBaseModelSerial
 from django_features.fields import UUIDRelatedField
 
 
-class BaseMappingSerializer(CustomFieldBaseModelSerializer):
+class PropertySerializer(serializers.Serializer):
     relation_separator: str = "."
+
+    class Meta:
+        abstract = True
+        fields = "__all__"
+        model = None
+
+    @property
+    def mapping(self) -> dict[str, dict[str, Any]]:
+        mapping = getattr(self, "_mapping", None)
+        if mapping is None:
+            raise ValueError("Mapping must be set")
+        return mapping
+
+    @property
+    def mapping_fields(self) -> list[str]:
+        mapping_fields = getattr(
+            self, "_mapping_fields", list(self.model_mapping.values())
+        )
+        if mapping_fields is None:
+            raise ValueError("Mapping fields must be set")
+        return mapping_fields
+
+    @property
+    def model_mapping(self) -> dict[str, Any]:
+        mapping = getattr(self, "mapping", None)
+        if mapping is None:
+            raise ValueError("Mapping must be set")
+        for key_path in mapping.keys():
+            key = key_path.split(self.relation_separator)[-1]
+            if key.lower() == self.model.__name__.lower():
+                return mapping.get(key_path, {})
+        return {}
+
+    @property
+    def model(self) -> models.Model:
+        model = getattr(self, "_model", self.Meta.model)
+        if model is None:
+            raise ValueError("Mapping must be set")
+        return model
+
+
+class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializer):
     serializer_related_field = UUIDRelatedField
     serializer_related_fields: dict[str, Any] = {}
 
@@ -31,20 +74,6 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer):
         super().__init__(*args, **kwargs)
         self.exclude: list[str] = []
         self.related_fields: set[str] = set()
-
-    @property
-    def mapping(self) -> dict[str, dict[str, Any]]:
-        raise NotImplementedError("Mapping must be set")
-
-    @property
-    def mapping_fields(self) -> list[str]:
-        raise NotImplementedError("Mapping fields must be set")
-
-    @property
-    def model(self) -> models.Model:
-        if self.Meta.model is None:
-            raise ValueError("Meta.model must be set")
-        return self.Meta.model
 
     def get_fields(self) -> dict[str, Any]:
         initial_fields = super().get_fields()
