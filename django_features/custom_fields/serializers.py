@@ -5,6 +5,7 @@ from django.db import models
 from rest_framework import serializers
 from rest_framework.fields import empty
 
+from django_features.custom_fields import get_custom_field_model
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomValue
@@ -28,7 +29,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
     choices = serializers.SerializerMethodField()
 
     class Meta:
-        model = CustomField
+        model = get_custom_field_model()
         fields = [
             "choice_field",
             "choices",
@@ -99,7 +100,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         if self.exclude_custom_fields:
             return fields
         self._custom_fields = []
-        custom_fields = list(CustomField.objects.for_model(self.model))
+        custom_fields = list(get_custom_field_model().objects.for_model(self.model))
         for field in custom_fields:
             self._custom_fields.append(
                 CustomFieldData(

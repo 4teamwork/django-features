@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.http import HttpRequest
 from modeltranslation.admin import TranslationAdmin
 
+from django_features.custom_fields import get_custom_field_model
 from django_features.custom_fields import models
 from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomFieldTypeBaseModel
@@ -41,7 +42,7 @@ class CustomFieldBaseAdmin(TranslationAdmin):
         return self.readonly_fields
 
 
-@admin.register(models.CustomField)
+@admin.register(get_custom_field_model())
 class CustomFieldAdmin(CustomFieldBaseAdmin):
     list_display = ["id", "identifier", "__str__", "field_type", "filterable"]
     list_display_links = (

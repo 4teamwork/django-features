@@ -159,4 +159,6 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
             },
         }
 
+    CUSTOM_FIELD_MODEL = "app.ExtendedCustomField"
+
     SECRET_KEY = values.SecretValue()

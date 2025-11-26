@@ -5,6 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management import BaseCommand
 
 from app.models import Person
+from django_features.custom_fields import get_custom_field_model
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomValue
 
@@ -42,7 +43,7 @@ class Command(BaseCommand):
         print("Add custom fields")
         for i in range(self.NUMBER_OF_CUSTOM_FIELDS):
             custom_fields.append(
-                CustomField(
+                get_custom_field_model()(
                     content_type=person_c,
                     field_type=CustomField.TYPE_CHOICES[field_type][0],
                     identifier=f"custom_field_{i}",
@@ -64,7 +65,7 @@ class Command(BaseCommand):
                 )
 
         print("Execute bulk create")
-        CustomField.objects.bulk_create(custom_fields)
+        get_custom_field_model().objects.bulk_create(custom_fields)
         CustomValue.objects.bulk_create(custom_values)
         Person.objects.bulk_create(objects)
 

@@ -1,0 +1,1 @@
+Add the possibility to configure the base class of the CustomField model and the CustomFieldQuerySet. [TI-2890](https://4teamwork.atlassian.net/browse/TI-2890>)

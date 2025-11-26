@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from app.models import Address
 from app.models import Person
 from app.tests import APITestCase
-from app.tests.custom_fields.factories import CustomFieldFactory
+from django_features.custom_fields.factories import CustomFieldFactory
 from django_features.custom_fields.models import CustomField
 from django_features.settings.fields import ModelFieldMapping
 
@@ -13,12 +13,12 @@ class ModelFieldMappingTestCase(APITestCase):
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
         self.address_ct = ContentType.objects.get_for_model(Address)
-        CustomFieldFactory(
+        CustomFieldFactory(  # type: ignore
             identifier="person_custom_field",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,
         )
-        CustomFieldFactory(
+        CustomFieldFactory(  # type: ignore
             identifier="address_custom_field",
             content_type=self.address_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,
