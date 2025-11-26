@@ -252,17 +252,4 @@ class DataMappingSerializer(PropertySerializer):
             )
         return data
 
-    @property
-    def mapping_fields(self) -> list[str]:
-        return list(self.model_mapping.values())
 
-    @property
-    def model_mapping(self) -> dict[str, Any]:
-        mapping = getattr(self, "mapping", None)
-        if mapping is None:
-            raise ValueError("Mapping must be set")
-        for key_path in mapping.keys():
-            key = key_path.split(self.relation_separator)[-1]
-            if key.lower() == self.model.__name__.lower():
-                return mapping.get(key_path, {})
-        return {}
