@@ -269,3 +269,46 @@ class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerialize
         return list_data
 
 
+class MappingSerializer(BaseMappingSerializer, DataMappingSerializer):
+    list_serializer_class = ListDataMappingSerializer
+
+    class Meta:
+        abstract = True
+        fields = "__all__"
+        model = None
+
+    def __init__(
+        self,
+        instance: Any = None,
+        data: Any = empty,
+        **kwargs: Any,
+    ) -> None:
+        self.instance = instance
+        self.unmapped_data = data
+        mapped_data = self.map_data(data)
+        super().__init__(instance, data=mapped_data, **kwargs)
+
+    @classmethod
+    def many_init(cls, *args: Any, **kwargs: Any) -> ListDataMappingSerializer:
+        list_kwargs = {}
+        for key in serializers.LIST_SERIALIZER_KWARGS_REMOVE:
+            value = kwargs.pop(key, None)
+            if value is not None:
+                list_kwargs[key] = value
+        child = cls(*args, **kwargs)
+        list_kwargs["child"] = child
+        list_kwargs["mapping"] = getattr(child, "mapping", {})
+        list_kwargs.update(
+            {
+                key: value
+                for key, value in kwargs.items()
+                if key in serializers.LIST_SERIALIZER_KWARGS
+            }
+        )
+        meta = getattr(cls, "Meta", None)
+        list_serializer_class = getattr(
+            meta, "list_serializer_class", cls.list_serializer_class
+        )
+        model = getattr(meta, "model", None)
+        list_kwargs["model"] = model
+        return list_serializer_class(*args, **list_kwargs)
