@@ -194,26 +194,9 @@ class NestedMappingSerializer(BaseMappingSerializer):
         super().__init__(*args, **kwargs)
 
 
-
-class MappingSerializer(BaseMappingSerializer):
+class DataMappingSerializer(PropertySerializer):
     _default_prefix = "default"
     _format_prefix = "format"
-
-    class Meta:
-        abstract = True
-        fields = "__all__"
-        model = None
-
-    def __init__(
-        self,
-        instance: Any = None,
-        data: Any = empty,
-        **kwargs: Any,
-    ) -> None:
-        self.instance = instance
-        self.unmapped_data = data
-        mapped_data = self.map_data(data)
-        super().__init__(instance, data=mapped_data, **kwargs)
 
     def _get_nested_data(self, field_path: list[str], data: Any) -> tuple[Any, bool]:
         field_name = field_path[0]
