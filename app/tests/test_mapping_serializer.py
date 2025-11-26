@@ -252,3 +252,50 @@ class MappingSerializerTestCase(APITestCase):
         self.assertEqual(2, instance.addresses.count())
         self.assertEqual(person, instance.addresses.first().target)
         self.assertEqual(person, instance.addresses.last().target)
+
+    @override_config(MODEL_MAPPING_FIELD=MODEL_MAPPING_FIELD)
+    def test_list_mapping_serializer_create(self) -> None:
+        koeniz = ElectionDistrictFactory(title="Koeniz")
+        muri = ElectionDistrictFactory(title="Muri")
+
+        data = [
+            {
+                "external_firstname": "Hugo",
+                "external_lastname": "Boss",
+                "external_election_district_title": "Koeniz",
+                "external_addresses": [
+                    self.address_1.external_uid,
+                    self.address_2.external_uid,
+                ],
+            },
+            {
+                "external_firstname": "Stefanie",
+                "external_lastname": "Muster",
+                "external_election_district_title": "Muri",
+                "external_addresses": [
+                    self.address_3.external_uid,
+                ],
+            },
+        ]
+
+        serializer = PersonMappingSerializer(data=data, many=True)
+        self.assertTrue(serializer.is_valid(raise_exception=True))
+        serializer.save()
+
+        hugo = Person.objects.get(firstname="Hugo")
+        stefanie = Person.objects.get(firstname="Stefanie")
+
+        self.assertEqual("Hugo", hugo.firstname)
+        self.assertEqual("Boss", hugo.lastname)
+
+        self.assertEqual("Stefanie", stefanie.firstname)
+        self.assertEqual("Muster", stefanie.lastname)
+
+        self.assertEqual(2, ElectionDistrict.objects.count())
+        self.assertEqual(koeniz, hugo.election_district)
+        self.assertEqual(muri, stefanie.election_district)
+
+        self.assertEqual(2, hugo.addresses.count())
+        self.assertEqual(1, stefanie.addresses.count())
+        self.assertEqual(hugo, hugo.addresses.first().target)
+        self.assertEqual(stefanie, stefanie.addresses.last().target)
