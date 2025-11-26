@@ -253,3 +253,19 @@ class DataMappingSerializer(PropertySerializer):
         return data
 
 
+class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializer):
+    def __init__(self, data: Any = empty, *args: Any, **kwargs: Any) -> None:
+        self.instance = None
+        self._mapping = kwargs.pop("mapping", {})
+        self._model = kwargs.pop("model", None)
+        self.unmapped_data = data if data is not empty else []
+        mapped_data = self.map_list_data(self.unmapped_data)
+        super().__init__(data=mapped_data, *args, **kwargs)
+
+    def map_list_data(self, initial_data: Any) -> list[Any]:
+        list_data: list[dict[str, Any]] = []
+        for item in initial_data:
+            list_data.append(self.map_data(item))
+        return list_data
+
+
