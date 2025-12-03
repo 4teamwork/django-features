@@ -306,6 +306,12 @@ class MappingSerializer(BaseMappingSerializer, DataMappingSerializer):
 
     @classmethod
     def many_init(cls, *args: Any, **kwargs: Any) -> ListDataMappingSerializer:
+        """
+        Overwrite the many_init function from the ModelSerializer to change the default listing serializer to the given
+        list_serializer_class attribute instead of the default ListSerializer. Therefore, the list serializer class can
+        be set with the attribute list_serializer_class on the serializer class instead of the Meta class.
+        """
+
         list_kwargs = {}
         for key in serializers.LIST_SERIALIZER_KWARGS_REMOVE:
             value = kwargs.pop(key, None)
