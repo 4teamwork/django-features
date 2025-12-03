@@ -23,10 +23,15 @@ class PropertySerializer(serializers.Serializer):
 
     @property
     def mapping(self) -> dict[str, dict[str, Any]]:
-        mapping = getattr(self, "_mapping", None)
-        if mapping is None:
-            raise ValueError("Mapping must be set")
-        return mapping
+        if getattr(self, "_mapping") is None:
+            raise ValueError(
+                "Property 'mapping' on instance must be set and can't be 'None'"
+            )
+        return self._mapping
+
+    @mapping.setter
+    def mapping(self, value: dict[str, dict[str, Any]]) -> None:
+        self._mapping = value
 
     @property
     def mapping_fields(self) -> list[str]:
@@ -34,26 +39,37 @@ class PropertySerializer(serializers.Serializer):
             self, "_mapping_fields", list(self.model_mapping.values())
         )
         if mapping_fields is None:
-            raise ValueError("Mapping fields must be set")
+            raise ValueError("Property 'mapping_fields' must be set and can't be 'None")
         return mapping_fields
+
+    @mapping_fields.setter
+    def mapping_fields(self, value: list[str]) -> None:
+        self._mapping_fields = value
 
     @property
     def model_mapping(self) -> dict[str, Any]:
-        mapping = getattr(self, "mapping", None)
-        if mapping is None:
-            raise ValueError("Mapping must be set")
-        for key_path in mapping.keys():
+        for key_path in self.mapping.keys():
             key = key_path.split(self.relation_separator)[-1]
             if key.lower() == self.model.__name__.lower():
-                return mapping.get(key_path, {})
+                return self.mapping.get(key_path, {})
         return {}
+
+    @model_mapping.setter
+    def model_mapping(self, value: dict[str, Any]) -> None:
+        self._model_mapping = value
 
     @property
     def model(self) -> models.Model:
         model = getattr(self, "_model", self.Meta.model)
         if model is None:
-            raise ValueError("Mapping must be set")
+            raise ValueError(
+                "Property 'model' must be set and can't be 'None. Default is 'Meta.model"
+            )
         return model
+
+    @model.setter
+    def model(self, value: models.Model) -> None:
+        self._model = value
 
 
 class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializer):
@@ -188,8 +204,8 @@ class NestedMappingSerializer(BaseMappingSerializer):
         **kwargs: Any,
     ) -> None:
         self.exclude = exclude
-        self._mapping_fields = nested_fields
-        self._mapping = parent_mapping
+        self.mapping_fields = nested_fields
+        self.mapping = parent_mapping
         self.Meta.model = field.related_model
         super().__init__(*args, **kwargs)
 
@@ -256,8 +272,8 @@ class DataMappingSerializer(PropertySerializer):
 class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializer):
     def __init__(self, data: Any = empty, *args: Any, **kwargs: Any) -> None:
         self.instance = None
-        self._mapping = kwargs.pop("mapping", {})
-        self._model = kwargs.pop("model", None)
+        self.mapping = kwargs.pop("mapping", {})
+        self.model = kwargs.pop("model")
         self.unmapped_data = data if data is not empty else []
         mapped_data = self.map_list_data(self.unmapped_data)
         super().__init__(data=mapped_data, *args, **kwargs)
