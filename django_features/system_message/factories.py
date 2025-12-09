@@ -1,13 +1,13 @@
 import datetime
 
 from factory import SubFactory
+from factory.django import DjangoModelFactory
 from pytz import UTC
 
-from app.tests.factories import BaseFactory
 from django_features.system_message import models
 
 
-class SystemMessageTypeFactory(BaseFactory):
+class SystemMessageTypeFactory(DjangoModelFactory):
     class Meta:
         model = models.SystemMessageType
 
@@ -15,7 +15,7 @@ class SystemMessageTypeFactory(BaseFactory):
     icon = "information"
 
 
-class SystemMessageFactory(BaseFactory):
+class SystemMessageFactory(DjangoModelFactory):
     class Meta:
         model = models.SystemMessage
 

@@ -7,6 +7,25 @@ from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
 
+"""
+CUSTOM_FIELD_BASE_MODEL_CLASS: type[TimeStampedModel] = import_string(
+    settings.CUSTOM_FIELD_BASE_MODEL_CLASS
+)
+if not issubclass(CUSTOM_FIELD_BASE_MODEL_CLASS, TimeStampedModel):
+    raise ValueError(
+        f"CUSTOM_FIELD_BASE_MODEL must inherit from TimeStampedModel, got {CUSTOM_FIELD_BASE_MODEL_CLASS}"
+    )
+
+CUSTOM_FIELD_BASE_QUERYSET_CLASS: type[models.QuerySet] = import_string(
+    settings.CUSTOM_FIELD_BASE_QUERYSET_CLASS
+)
+if not issubclass(CUSTOM_FIELD_BASE_QUERYSET_CLASS, models.QuerySet):
+    raise ValueError(
+        f"CUSTOM_FIELD_BASE_QUERYSET must inherit from models.QuerySet, got {CUSTOM_FIELD_BASE_QUERYSET_CLASS}"
+    )
+"""
+
+
 class CustomFieldQuerySet(models.QuerySet):
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
@@ -119,6 +138,7 @@ class CustomField(TimeStampedModel):
         verbose_name = _("Benutzerdefiniertes Feld")
         verbose_name_plural = _("Benutzerdefinierte Felder")
         ordering = ["order", "created"]
+        swappable = "CUSTOM_FIELD_MODEL"
 
     def __str__(self) -> str:
         return f"{self.label}"

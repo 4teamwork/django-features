@@ -53,6 +53,16 @@ Your querysets should inherit from `django_features.custom_fields.models.CustomF
 
 Your serializers should inherit from `django_features.custom_fields.serializers.CustomFieldBaseModelSerializer`.
 
+#### Base classes
+
+It is possible to create a base class for the CustomField model and extend it with more attributes and functions:
+
+`CUSTOM_FIELD_BASE_MODEL_CLASS = "example_app.models.CustomFieldBaseModelClass"`
+
+It is possible to create a base class for the CustomFieldQuerSet and extend it with more attributes and functions:
+
+`CUSTOM_FIELD_BASE_QUERYSET_CLASS = "example_app.models.CustomFieldBaseQuerySet"`
+
 ### System Message
 
 If you want to use `django_features.system_message`, your base configuration class should inherit from `django_features.system_message.settings.SystemMessageConfigurationMixin`.

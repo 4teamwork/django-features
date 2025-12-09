@@ -1,12 +1,13 @@
 from django.db.models import QuerySet
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from django_features.custom_fields import get_custom_field_model
 from django_features.custom_fields import models
 from django_features.custom_fields import serializers
 
 
 class CustomFieldViewSet(ReadOnlyModelViewSet):
-    queryset = models.CustomField.objects.all()
+    queryset = get_custom_field_model().objects.all()
     serializer_class = serializers.CustomFieldSerializer
 
     valid_content_type_filter_fields = ["app_label", "model"]
