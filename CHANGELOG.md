@@ -31,36 +31,12 @@ Bug fixes:
 - Fixes AttributeError when overriding the init function of the CustomFieldBaseModelSerializer because of the params. (`TI-2994 <https://4teamwork.atlassian.net/browse/TI-2994>`_)
 
 
-2025.5.12 (2025-10-27)
-----------------------
-
-No changes.
-
-
-2025.5.11 (2025-10-27)
-----------------------
-
-No changes.
-
-
 2025.5.10 (2025-10-27)
 ----------------------
 
 Bug fixes:
 
 - Array custom fields get annotated correctly.
-
-
-2025.5.9 (2025-10-24)
----------------------
-
-No changes.
-
-
-2025.8.0 (2025-10-24)
----------------------
-
-No changes.
 
 
 2025.5.8 (2025-10-24)
@@ -79,66 +55,12 @@ Bug fixes:
 - Handle None values when setting custom values. (`master <https://4teamwork.atlassian.net/browse/master>`_)
 
 
-2025.5.5 (2025-10-23)
----------------------
-
-No changes.
-
-
-2025.5.4 (2025-10-23)
----------------------
-
-No changes.
-
-
-2025.5.3 (2025-10-23)
----------------------
-
-No changes.
-
-
-2025.5.2 (2025-10-23)
----------------------
-
-No changes.
-
-
-2025.5.1 (2025-10-23)
----------------------
-
-No changes.
-
-
 2025.5.0 (2025-10-23)
 ---------------------
 
 Other changes:
 
 - Improve MappingSerializer and add option for more related fields. (`TI-2893 <https://4teamwork.atlassian.net/browse/TI-2893>`_)
-
-
-2025.4.3 (2025-10-22)
----------------------
-
-No changes.
-
-
-2025.3.0 (2025-10-22)
----------------------
-
-No changes.
-
-
-2025.4.2 (2025-10-22)
----------------------
-
-No changes.
-
-
-2025.4.1 (2025-10-22)
----------------------
-
-No changes.
 
 
 2025.4.0 (2025-10-22)
