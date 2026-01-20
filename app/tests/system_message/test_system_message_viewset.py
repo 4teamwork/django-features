@@ -7,8 +7,8 @@ from freezegun import freeze_time
 from pluck import pluck
 
 from app.tests import APITestCase
-from app.tests.system_message.factories import SystemMessageFactory
-from app.tests.system_message.factories import SystemMessageTypeFactory
+from django_features.system_message.factories import SystemMessageFactory
+from django_features.system_message.factories import SystemMessageTypeFactory
 
 
 class SystemInfoViewSetTest(APITestCase):
