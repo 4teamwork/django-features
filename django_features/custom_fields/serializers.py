@@ -128,6 +128,22 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             fields[field.identifier] = serialized_field
         return fields
 
+    def collect_custom_fields(self) -> dict:
+        if not hasattr(self, "_custom_fields"):
+            return {}
+
+        if hasattr(self, "initial_data"):
+            data = self.validated_data
+        elif self.instance is not None:
+            data = self.data
+        else:
+            return {}
+        return {
+            field.identifier: data.pop(field.identifier)
+            for field in self._custom_fields
+            if field.identifier in data
+        }
+
     def create(self, validated_data: dict) -> Any:
         custom_value_instances: list[CustomValue] = []
         choices: list[CustomValue] = []
