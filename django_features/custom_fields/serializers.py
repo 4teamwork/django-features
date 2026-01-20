@@ -83,6 +83,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self.exclude_custom_fields: bool = kwargs.get(
             "exclude_custom_fields", self._exclude_custom_fields
         )
+        self._filter: dict[str, Any] = {}
         self.write_only_serializer = kwargs.get(
             "write_only_serializer", self._write_only_serializer
         )
@@ -94,12 +95,22 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             raise ValueError("Meta.model must be set")
         return self.Meta.model
 
+    @property
+    def filter(self) -> dict[str, Any]:
+        return self._filter
+
+    @filter.setter
+    def filter(self, value: dict[str, Any]) -> None:
+        self._filter = value
+
     def get_fields(self) -> dict[str, Any]:
         fields = super().get_fields()
         if self.exclude_custom_fields:
             return fields
         self._custom_fields = []
-        custom_fields = list(CustomField.objects.for_model(self.model))
+        custom_fields = list(
+            CustomField.objects.for_model(self.model).filter(**self.filter)
+        )
         for field in custom_fields:
             self._custom_fields.append(
                 CustomFieldData(
