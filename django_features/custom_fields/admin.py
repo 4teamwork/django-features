@@ -11,7 +11,7 @@ from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomFieldTypeBaseModel
 
 
-class CustomFieldBaseAdmin(TranslationAdmin):
+class CustomFieldBaseAdmin(admin.ModelAdmin):
     def has_module_permission(self, request: HttpRequest) -> bool:
         return settings.CUSTOM_FIELDS_FEATURE
 
@@ -42,7 +42,7 @@ class CustomFieldBaseAdmin(TranslationAdmin):
 
 
 @admin.register(models.CustomField)
-class CustomFieldAdmin(CustomFieldBaseAdmin):
+class CustomFieldAdmin(CustomFieldBaseAdmin, TranslationAdmin):
     list_display = ["id", "identifier", "__str__", "field_type", "filterable"]
     list_display_links = (
         "id",
