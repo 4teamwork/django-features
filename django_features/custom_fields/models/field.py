@@ -119,6 +119,7 @@ class CustomField(TimeStampedModel):
         verbose_name = _("Benutzerdefiniertes Feld")
         verbose_name_plural = _("Benutzerdefinierte Felder")
         ordering = ["order", "created"]
+        swappable = "CUSTOM_FIELD_MODEL"
 
     def __str__(self) -> str:
         return f"{self.label}"

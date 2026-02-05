@@ -42,6 +42,7 @@ class CustomValue(TimeStampedModel):
         ordering = ["order", "created"]
         verbose_name = _("Benutzerdefinierter Wert")
         verbose_name_plural = _("Benutzerdefinierte Werte")
+        swappable = "CUSTOM_MODEL_VALUE_MODEL"
 
     def __str__(self) -> str:
         return self.text or ""
@@ -49,3 +50,12 @@ class CustomValue(TimeStampedModel):
     @property
     def text(self) -> str:
         return self.label or str(self.value)
+
+
+class CustomValue(AbstractBaseCustomValue):
+
+    class Meta:
+        ordering = ["order", "created"]
+        verbose_name = _("Benutzerdefinierter Wert")
+        verbose_name_plural = _("Benutzerdefinierte Werte")
+        swappable = "CUSTOM_FIELD_VALUE_MODEL"
