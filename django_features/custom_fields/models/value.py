@@ -24,7 +24,7 @@ class CustomValueQuerySet(models.QuerySet):
         return self.for_model(model).default()
 
 
-class CustomValue(TimeStampedModel):
+class AbstractBaseCustomValue(TimeStampedModel):
     field = models.ForeignKey(
         settings.CUSTOM_FIELD_MODEL,
         related_name="values",
@@ -38,10 +38,7 @@ class CustomValue(TimeStampedModel):
     objects = CustomValueQuerySet.as_manager()
 
     class Meta:
-        ordering = ["order", "created"]
-        verbose_name = _("Benutzerdefinierter Wert")
-        verbose_name_plural = _("Benutzerdefinierte Werte")
-        swappable = "CUSTOM_MODEL_VALUE_MODEL"
+        abstract = True
 
     def __str__(self) -> str:
         return self.text or ""

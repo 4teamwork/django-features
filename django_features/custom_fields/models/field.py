@@ -41,7 +41,7 @@ class FieldType:
     BOOLEAN = "BOOLEAN"
 
 
-class CustomField(TimeStampedModel):
+class AbstractBaseCustomField(TimeStampedModel):
     FIELD_TYPES = FieldType
 
     TYPE_SQL_MAP = {
@@ -118,10 +118,7 @@ class CustomField(TimeStampedModel):
     objects = CustomFieldQuerySet.as_manager()
 
     class Meta:
-        verbose_name = _("Benutzerdefiniertes Feld")
-        verbose_name_plural = _("Benutzerdefinierte Felder")
-        ordering = ["order", "created"]
-        swappable = "CUSTOM_FIELD_MODEL"
+        abstract = True
 
     def __str__(self) -> str:
         return f"{self.label}"
@@ -176,3 +173,11 @@ class CustomField(TimeStampedModel):
         if not sql_field:
             raise ValueError(f"Unknown field type: {self.field_type}")
         return sql_field
+
+
+class CustomField(AbstractBaseCustomField):
+    class Meta:
+        verbose_name = _("Benutzerdefiniertes Feld")
+        verbose_name_plural = _("Benutzerdefinierte Felder")
+        ordering = ["order", "created"]
+        swappable = "CUSTOM_FIELD_MODEL"
