@@ -10,7 +10,7 @@ from django.db.models.fields import NOT_PROVIDED
 from django.db.models.fields.related import RelatedField
 from rest_framework.utils.model_meta import get_field_info
 
-from django_features.custom_fields.models import CustomField
+from django_features.custom_fields.helpers import get_custom_field_model
 
 
 class MappingValidationMixin:
@@ -67,7 +67,8 @@ class MappingValidationMixin:
 
         content_type = ContentType.objects.get_for_model(model)
         return list(
-            CustomField.objects.filter(content_type=content_type)
+            get_custom_field_model()
+            .objects.filter(content_type=content_type)
             .values_list("identifier", flat=True)
             .distinct()
         )

@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.postgres.expressions import ArraySubquery
 from django.db import IntegrityError
@@ -15,9 +16,15 @@ from django.db.models.functions import JSONObject
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 
+from django_features.custom_fields.helpers import get_custom_field_model
+from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models.field import CustomField
 from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.value import CustomValue
+
+
+CustomFieldModel: CustomField = get_custom_field_model()  # type: ignore
+CustomValueModel: CustomValue = get_custom_value_model()  # type: ignore
 
 
 class CustomFieldModelBaseManager(models.Manager):
@@ -46,8 +53,10 @@ class CustomFieldModelBaseManager(models.Manager):
             f"{self.model._meta.model_name}__id": OuterRef("pk"),
         }
 
-        custom_values_queryset = CustomValue.objects.for_model(self.model).filter(
-            **pk_filter, field__identifier=field.identifier
+        custom_values_queryset = (
+            get_custom_value_model()
+            .objects.for_model(self.model)
+            .filter(**pk_filter, field__identifier=field.identifier)
         )
 
         if not field.choice_field:
@@ -79,7 +88,7 @@ class CustomFieldModelBaseManager(models.Manager):
         We filter all available custom fields for the current model.
         """
         try:
-            available_fields = CustomField.objects.for_model(self.model)
+            available_fields = get_custom_field_model().objects.for_model(self.model)
 
             """
             This for loop creates a dict with all available custom field values with a subquery for the specific object.
@@ -115,7 +124,10 @@ class CustomFieldModelBaseManager(models.Manager):
 
 class CustomFieldTypeBaseModel(TimeStampedModel):
     custom_fields = GenericRelation(
-        CustomField, object_id_field="type_id", content_type_field="type_content_type"
+        settings.CUSTOM_FIELD_MODEL,
+        object_id_field="type_id",
+        content_type_field="type_content_type",
+        swappable=True,
     )
 
     class Meta:
@@ -127,7 +139,7 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     custom_values = models.ManyToManyField(
         blank=True,
-        to=CustomValue,
+        to=settings.CUSTOM_FIELD_VALUE_MODEL,
         verbose_name=_("Benutzerdefinierte Werte"),
     )
     objects = CustomFieldModelBaseManager()
@@ -177,15 +189,17 @@ class CustomFieldBaseModel(TimeStampedModel):
             if value is None:
                 self._custom_values_to_delete.append(value_object.id)
                 return
-        except CustomValue.DoesNotExist:
-            value_object = CustomValue(field=field)
+        except CustomValueModel.DoesNotExist:
+            value_object = CustomValueModel(field=field)
         serializer_field = value_object.field.serializer_field
         serializer_field.run_validators(value)
         value_object.value = serializer_field.to_representation(value)
         self._custom_values_to_save.append(value_object)
 
     def _set_choice_value(self, field: CustomField, value: Any) -> None:
-        self._custom_values_to_remove.extend(CustomValue.objects.filter(field=field))
+        self._custom_values_to_remove.extend(
+            CustomValueModel.objects.filter(field=field)
+        )
         if value is None:
             return
         if field.multiple:
@@ -206,7 +220,7 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     def __setattr__(self, name: str, value: Any) -> None:
         if hasattr(self, "custom_field_keys") and name in self.custom_field_keys:
-            field = CustomField.objects.get(identifier=name)
+            field = CustomFieldModel.objects.get(identifier=name)
             if field.choice_field:
                 self._set_choice_value(field, value)
             else:
@@ -225,7 +239,7 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     @property
     def custom_fields(self) -> CustomFieldQuerySet:
-        return CustomField.objects.for_model(self.__class__)
+        return CustomFieldModel.objects.for_model(self.__class__)
 
     @property
     def custom_field_type(self) -> CustomFieldTypeBaseModel | None:
@@ -235,10 +249,10 @@ class CustomFieldBaseModel(TimeStampedModel):
 
     @property
     def default_custom_fields(self) -> CustomFieldQuerySet:
-        return CustomField.objects.default_for(self.__class__)
+        return CustomFieldModel.objects.default_for(self.__class__)
 
     @property
     def type_custom_fields(self) -> CustomFieldQuerySet:
         if self.custom_field_type:
             return self.custom_field_type.custom_fields.all()
-        return CustomField.objects.none()
+        return CustomFieldModel.objects.none()

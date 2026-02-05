@@ -2,8 +2,10 @@
 
 import django.db.models.deletion
 import django_extensions.db.fields
+from django.conf import settings
 from django.db import migrations
 from django.db import models
+from django.db.migrations import swappable_dependency
 
 
 class Migration(migrations.Migration):
@@ -12,6 +14,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("contenttypes", "0002_remove_content_type_name"),
+        swappable_dependency(settings.CUSTOM_FIELD_MODEL),
     ]
 
     operations = [
@@ -157,7 +160,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="values",
-                        to="custom_fields.customfield",
+                        to=settings.CUSTOM_FIELD_MODEL,
                         verbose_name="Feld",
                     ),
                 ),

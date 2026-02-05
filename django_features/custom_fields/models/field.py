@@ -6,6 +6,8 @@ from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
+from django_features.custom_fields.helpers import get_custom_value_model
+
 
 class CustomFieldQuerySet(models.QuerySet):
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
@@ -126,11 +128,11 @@ class CustomField(TimeStampedModel):
 
     @property
     def choices(self) -> list[tuple[str, str]]:
-        from django_features.custom_fields.models import CustomValue
+        custom_value_model = get_custom_value_model()
 
         if not self.choice_field:
-            return CustomValue.objects.none()
-        return CustomValue.objects.filter(field=self)
+            return custom_value_model.objects.none()
+        return custom_value_model.objects.filter(field=self)
 
     @property
     def output_field(self) -> models.Field:

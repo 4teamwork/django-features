@@ -6,6 +6,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.utils.model_meta import get_field_info
 
+from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomValue
 from django_features.custom_fields.models.value import CustomValueQuerySet
@@ -26,14 +27,14 @@ class ChoiceIdField(serializers.Field):
     def set_unique_field(self, unique_field: str | None) -> None:
         self._unique_field = unique_field or "id"
 
-        valid_fields = get_field_info(CustomValue).fields_and_pk
+        valid_fields = get_field_info(get_custom_value_model()).fields_and_pk
         if self._unique_field not in valid_fields:
             raise ValueError(
                 f"The unique_field must be a valid field of {valid_fields}: invalid field {self.unique_field}"
             )
 
     def get_queryset(self) -> CustomValueQuerySet:
-        return CustomValue.objects.filter(field_id=self.field.id)
+        return get_custom_value_model().objects.filter(field_id=self.field.id)
 
     def to_representation(
         self, value: CustomValue | CustomValueQuerySet

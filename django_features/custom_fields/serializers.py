@@ -5,19 +5,24 @@ from django.db import models
 from rest_framework import serializers
 from rest_framework.fields import empty
 
+from django_features.custom_fields.helpers import get_custom_field_model
+from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomValue
 
 
+CustomValueModel = get_custom_value_model()
+
+
 class CustomChoiceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CustomValue
+        model = CustomValueModel
         fields = ["id", "label", "value"]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        if isinstance(self.instance, CustomValue):
+        if isinstance(self.instance, CustomValueModel):
             field = self.instance.field
             self.fields["value"] = CustomField.TYPE_SERIALIZER_MAP[field.field_type](
                 allow_null=True, read_only=True, required=False
@@ -28,7 +33,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
     choices = serializers.SerializerMethodField()
 
     class Meta:
-        model = CustomField
+        model = get_custom_field_model()
         fields = [
             "choice_field",
             "choices",
@@ -109,7 +114,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             return fields
         self._custom_fields = []
         custom_fields = list(
-            CustomField.objects.for_model(self.model).filter(**self.filter)
+            get_custom_field_model().objects.for_model(self.model).filter(**self.filter)
         )
         for field in custom_fields:
             self._custom_fields.append(
@@ -153,7 +158,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 continue
             if not field.choice_field:
                 custom_value_instances.append(
-                    CustomValue(
+                    CustomValueModel(
                         field_id=field.id,
                         value=self.fields[field.identifier].to_representation(value),
                     )
@@ -165,7 +170,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     choices.append(value)
         instance = super().create(validated_data)
         if custom_value_instances or choices:
-            custom_values = CustomValue.objects.bulk_create(custom_value_instances)
+            custom_values = CustomValueModel.objects.bulk_create(custom_value_instances)
             custom_values.extend(choices)
             instance.custom_values.set(custom_values)
         return instance
@@ -186,9 +191,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             else:
                 value_object.value = value
                 value_object.save()
-        except CustomValue.DoesNotExist:
+        except CustomValueModel.DoesNotExist:
             if value is not None:
-                value_object = CustomValue.objects.create(
+                value_object = CustomValueModel.objects.create(
                     field_id=field.id, value=value
                 )
                 instance.custom_values.add(value_object)
