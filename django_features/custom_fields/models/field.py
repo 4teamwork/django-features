@@ -7,6 +7,7 @@ from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
 from django_features.custom_fields.helpers import get_custom_value_model
+from django_features.custom_fields.models.value import CustomValueQuerySet
 
 
 class CustomFieldQuerySet(models.QuerySet):
@@ -124,7 +125,7 @@ class AbstractBaseCustomField(TimeStampedModel):
         return f"{self.label}"
 
     @property
-    def choices(self) -> list[tuple[str, str]]:
+    def choices(self) -> CustomValueQuerySet:
         custom_value_model = get_custom_value_model()
 
         if not self.choice_field:
