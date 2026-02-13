@@ -1,4 +1,17 @@
 
+2026.2.0 (2026-02-13)
+---------------------
+
+New features:
+
+- The CustomField and CustomValue models are now swappable. (`TI-2890 <https://4teamwork.atlassian.net/browse/TI-2890>`_)
+
+
+Bug fixes:
+
+- Fix MappingSerializer if many is true. [TI-2893](https://4teamwork.atlassian.net/browse/TI-2893>)
+
+
 2025.6.1 (2025-11-05)
 ---------------------
 
