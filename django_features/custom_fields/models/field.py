@@ -6,6 +6,9 @@ from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
+from django_features.custom_fields.helpers import get_custom_value_model
+from django_features.custom_fields.models.value import CustomValueQuerySet
+
 
 class CustomFieldQuerySet(models.QuerySet):
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
@@ -39,7 +42,7 @@ class FieldType:
     BOOLEAN = "BOOLEAN"
 
 
-class CustomField(TimeStampedModel):
+class AbstractBaseCustomField(TimeStampedModel):
     FIELD_TYPES = FieldType
 
     TYPE_SQL_MAP = {
@@ -116,20 +119,18 @@ class CustomField(TimeStampedModel):
     objects = CustomFieldQuerySet.as_manager()
 
     class Meta:
-        verbose_name = _("Benutzerdefiniertes Feld")
-        verbose_name_plural = _("Benutzerdefinierte Felder")
-        ordering = ["order", "created"]
+        abstract = True
 
     def __str__(self) -> str:
         return f"{self.label}"
 
     @property
-    def choices(self) -> list[tuple[str, str]]:
-        from django_features.custom_fields.models import CustomValue
+    def choices(self) -> CustomValueQuerySet:
+        custom_value_model = get_custom_value_model()
 
         if not self.choice_field:
-            return CustomValue.objects.none()
-        return CustomValue.objects.filter(field=self)
+            return custom_value_model.objects.none()
+        return custom_value_model.objects.filter(field=self)
 
     @property
     def output_field(self) -> models.Field:
@@ -173,3 +174,11 @@ class CustomField(TimeStampedModel):
         if not sql_field:
             raise ValueError(f"Unknown field type: {self.field_type}")
         return sql_field
+
+
+class CustomField(AbstractBaseCustomField):
+    class Meta:
+        verbose_name = _("Benutzerdefiniertes Feld")
+        verbose_name_plural = _("Benutzerdefinierte Felder")
+        ordering = ["order", "created"]
+        swappable = "CUSTOM_FIELD_MODEL"

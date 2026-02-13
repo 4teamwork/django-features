@@ -11,10 +11,12 @@ from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomFieldTypeBaseModel
 
 
-class CustomFieldBaseAdmin(TranslationAdmin):
+class BaseAdmin(admin.ModelAdmin):
     def has_module_permission(self, request: HttpRequest) -> bool:
-        return settings.CUSTOM_FIELDS_FEATURE
+        return settings.CUSTOM_FIELD_ADMIN and settings.CUSTOM_FIELDS_FEATURE
 
+
+class CustomFieldBaseAdmin(admin.ModelAdmin):
     def get_form(self, request: HttpRequest, obj: Any = None, **kwargs: Any) -> Any:
         form = super().get_form(request, obj, **kwargs)
         form.base_fields["content_type"].queryset = ContentType.objects.filter(
@@ -42,7 +44,7 @@ class CustomFieldBaseAdmin(TranslationAdmin):
 
 
 @admin.register(models.CustomField)
-class CustomFieldAdmin(CustomFieldBaseAdmin):
+class CustomFieldAdmin(BaseAdmin, CustomFieldBaseAdmin, TranslationAdmin):
     list_display = ["id", "identifier", "__str__", "field_type", "filterable"]
     list_display_links = (
         "id",
@@ -60,6 +62,6 @@ class CustomFieldAdmin(CustomFieldBaseAdmin):
 
 
 @admin.register(models.CustomValue)
-class ValueAdmin(TranslationAdmin):
+class ValueAdmin(BaseAdmin, TranslationAdmin):
     list_display = ["id", "__str__"]
     search_fields = ("label", "value", "field__label", "field__identifier")

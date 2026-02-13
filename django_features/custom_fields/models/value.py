@@ -1,8 +1,7 @@
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
-
-from django_features.custom_fields.models.field import CustomField
 
 
 class CustomValueQuerySet(models.QuerySet):
@@ -25,9 +24,9 @@ class CustomValueQuerySet(models.QuerySet):
         return self.for_model(model).default()
 
 
-class CustomValue(TimeStampedModel):
+class AbstractBaseCustomValue(TimeStampedModel):
     field = models.ForeignKey(
-        CustomField,
+        settings.CUSTOM_FIELD_MODEL,
         related_name="values",
         verbose_name=_("Feld"),
         on_delete=models.CASCADE,
@@ -39,9 +38,7 @@ class CustomValue(TimeStampedModel):
     objects = CustomValueQuerySet.as_manager()
 
     class Meta:
-        ordering = ["order", "created"]
-        verbose_name = _("Benutzerdefinierter Wert")
-        verbose_name_plural = _("Benutzerdefinierte Werte")
+        abstract = True
 
     def __str__(self) -> str:
         return self.text or ""
@@ -49,3 +46,12 @@ class CustomValue(TimeStampedModel):
     @property
     def text(self) -> str:
         return self.label or str(self.value)
+
+
+class CustomValue(AbstractBaseCustomValue):
+
+    class Meta:
+        ordering = ["order", "created"]
+        verbose_name = _("Benutzerdefinierter Wert")
+        verbose_name_plural = _("Benutzerdefinierte Werte")
+        swappable = "CUSTOM_FIELD_VALUE_MODEL"

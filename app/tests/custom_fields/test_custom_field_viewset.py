@@ -4,7 +4,7 @@ from pluck import pluck
 from app.models import Address
 from app.models import Person
 from app.tests import APITestCase
-from app.tests.custom_fields.factories import CustomFieldFactory
+from django_features.custom_fields.factories import CustomFieldFactory
 
 
 class CustomFieldViewSetTest(APITestCase):

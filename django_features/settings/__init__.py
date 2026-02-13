@@ -10,7 +10,11 @@ class BaseConfiguration(Configuration):
     PAGE_QUERY_PARAM = values.Value("page")
     PAGE_SIZE_QUERY_PARAM = values.Value("page_size")
 
+    CUSTOM_FIELD_ADMIN = values.BooleanValue(default=True)
     CUSTOM_FIELD_APP = values.Value("django_features.custom_fields")
+
+    CUSTOM_FIELD_MODEL = values.Value("custom_fields.CustomField")
+    CUSTOM_FIELD_VALUE_MODEL = values.Value("custom_fields.CustomValue")
 
     @property
     def CUSTOM_FIELDS_FEATURE(self) -> bool:

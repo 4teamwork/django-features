@@ -45,6 +45,11 @@ path("api/", include(custom_field_router.urls)),
 
 Your models should inherit from `django_features.custom_fields.models.CustomFieldBaseModel`.
 
+#### Swappable
+
+You can swap the models used by the `django_features.custom_fields` app by setting the `CUSTOM_FIELD_MODEL` or `CUSTOM_FIELD_VALUE_MODEL` setting.
+The swapped models should inherit from `django_features.custom_fields.models.field.AbstractBaseCustomField` or `django_features.custom_fields.models.value.AbstractBaseCustomValue`.
+
 #### Querysets
 
 Your querysets should inherit from `django_features.custom_fields.models.CustomFieldModelBaseManager`.
