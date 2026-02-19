@@ -6,16 +6,33 @@ from django.conf import settings
 from django.db import migrations
 from django.db import models
 from django.db.migrations import swappable_dependency
+from django.db.migrations.recorder import MigrationRecorder
+
+
+def dependencies() -> list[tuple[str, str]]:
+    """
+    This migration has a dynamic dependency on the swappable model. The problem is that the migration has already been
+    applied because the swappable feature was implemented later. To avoid dependency issues during migrating, the
+    dependencies for this migration are dynamic. If the migration has already been applied, the dependencies are only
+    0002_remove_content_type_name. If the migration has not been applied yet, the dependencies are
+    0002_remove_content_type_name and the swappable dependency.
+
+    :return: A list of dependencies.
+    """
+    deps: list[tuple[str, str]] = [("contenttypes", "0002_remove_content_type_name")]
+
+    if MigrationRecorder.Migration.objects.filter(
+        name="0001_initial", app="custom_fields"
+    ).exists():
+        return deps
+    return deps + [swappable_dependency(settings.CUSTOM_FIELD_MODEL)]
 
 
 class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-        ("contenttypes", "0002_remove_content_type_name"),
-        swappable_dependency(settings.CUSTOM_FIELD_MODEL),
-    ]
+    dependencies = dependencies()
 
     operations = [
         migrations.CreateModel(

@@ -1,0 +1,1 @@
+Make initial custom fields dependencies dynamic to fix dependency inconsistency. (`TI-3652 <https://4teamwork.atlassian.net/browse/TI-3652>`_)
