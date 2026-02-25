@@ -4,10 +4,12 @@ __all__ = ["get_custom_field_model", "get_custom_value_model"]
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Model
+
+from django_features.custom_fields.models.field import AbstractBaseCustomField
+from django_features.custom_fields.models.value import AbstractBaseCustomValue
 
 
-def get_custom_field_model() -> type[Model]:
+def get_custom_field_model() -> AbstractBaseCustomField:
     """
     Return the CustomField model that is active in this project.
     """
@@ -29,10 +31,7 @@ def get_custom_field_model() -> type[Model]:
         )
 
 
-from django_features.custom_fields.models.value import CustomValue  # noqa
-
-
-def get_custom_value_model() -> type[Model]:
+def get_custom_value_model() -> AbstractBaseCustomValue:
     """
     Return the CustomValue model that is active in this project.
     """

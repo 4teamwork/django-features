@@ -3,18 +3,16 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from django_features.custom_fields import serializers
 from django_features.custom_fields.helpers import get_custom_field_model
-
-
-CustomFieldModel = get_custom_field_model()
+from django_features.custom_fields.models.field import AbstractBaseCustomField
 
 
 class CustomFieldViewSet(ReadOnlyModelViewSet):
-    queryset = CustomFieldModel.objects.all()
+    queryset = get_custom_field_model().objects.all()
     serializer_class = serializers.CustomFieldSerializer
 
     valid_content_type_filter_fields = ["app_label", "model"]
 
-    def get_queryset(self) -> QuerySet[CustomFieldModel]:
+    def get_queryset(self) -> QuerySet[AbstractBaseCustomField]:
         qs = super().get_queryset()
         for field in self.valid_content_type_filter_fields:
             value = self.request.GET.get(field)
