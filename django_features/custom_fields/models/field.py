@@ -174,11 +174,3 @@ class AbstractBaseCustomField(TimeStampedModel):
         if not sql_field:
             raise ValueError(f"Unknown field type: {self.field_type}")
         return sql_field
-
-
-class CustomField(AbstractBaseCustomField):
-    class Meta:
-        verbose_name = _("Benutzerdefiniertes Feld")
-        verbose_name_plural = _("Benutzerdefinierte Felder")
-        ordering = ["order", "created"]
-        swappable = "CUSTOM_FIELD_MODEL"

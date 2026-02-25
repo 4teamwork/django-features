@@ -1,7 +1,5 @@
 from typing import Any
 
-from django.conf import settings
-from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.postgres.expressions import ArraySubquery
 from django.db import IntegrityError
 from django.db import models
@@ -13,7 +11,6 @@ from django.db.models import Subquery
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Cast
 from django.db.models.functions import JSONObject
-from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 
 from django_features.custom_fields.helpers import get_custom_field_model
@@ -123,25 +120,12 @@ class CustomFieldModelBaseManager(models.Manager):
 
 
 class CustomFieldTypeBaseModel(TimeStampedModel):
-    custom_fields = GenericRelation(
-        settings.CUSTOM_FIELD_MODEL,
-        object_id_field="type_id",
-        content_type_field="type_content_type",
-        swappable=True,
-    )
-
     class Meta:
         abstract = True
 
 
 class CustomFieldBaseModel(TimeStampedModel):
     _custom_field_type_attr: str | None = None
-
-    custom_values = models.ManyToManyField(
-        blank=True,
-        to=settings.CUSTOM_FIELD_VALUE_MODEL,
-        verbose_name=_("Benutzerdefinierte Werte"),
-    )
     objects = CustomFieldModelBaseManager()
 
     class Meta:
