@@ -1,5 +1,11 @@
-__all__ = ["get_custom_field_model", "get_custom_value_model"]
+__all__ = [
+    "get_custom_field_model",
+    "get_custom_value_model",
+    "clear_custom_field_model_cache",
+]
 
+
+from functools import lru_cache
 
 from django.apps import apps as django_apps
 from django.conf import settings
@@ -9,7 +15,8 @@ from django_features.custom_fields.models.field import AbstractBaseCustomField
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
 
 
-def get_custom_field_model() -> AbstractBaseCustomField:
+@lru_cache(maxsize=1)
+def get_custom_field_model() -> type[AbstractBaseCustomField]:
     """
     Return the CustomField model that is active in this project.
     """
@@ -31,7 +38,8 @@ def get_custom_field_model() -> AbstractBaseCustomField:
         )
 
 
-def get_custom_value_model() -> AbstractBaseCustomValue:
+@lru_cache(maxsize=1)
+def get_custom_value_model() -> type[AbstractBaseCustomValue]:
     """
     Return the CustomValue model that is active in this project.
     """
@@ -53,3 +61,11 @@ def get_custom_value_model() -> AbstractBaseCustomValue:
             "CUSTOM_FIELD_VALUE_MODEL refers to model '%s' that has not been installed"
             % settings.CUSTOM_FIELD_VALUE_MODEL
         )
+
+
+def clear_custom_field_model_cache() -> None:
+    """
+    Clear cached model lookups for custom fields.
+    """
+    get_custom_field_model.cache_clear()
+    get_custom_value_model.cache_clear()
