@@ -4,9 +4,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.http import HttpRequest
-from modeltranslation.admin import TranslationAdmin
 
-from django_features.custom_fields import models
 from django_features.custom_fields.models import CustomFieldBaseModel
 from django_features.custom_fields.models import CustomFieldTypeBaseModel
 
@@ -41,27 +39,3 @@ class CustomFieldBaseAdmin(admin.ModelAdmin):
         if obj:
             return [*self.readonly_fields, "field_type"]
         return self.readonly_fields
-
-
-@admin.register(models.CustomField)
-class CustomFieldAdmin(BaseAdmin, CustomFieldBaseAdmin, TranslationAdmin):
-    list_display = ["id", "identifier", "__str__", "field_type", "filterable"]
-    list_display_links = (
-        "id",
-        "identifier",
-        "__str__",
-    )
-    list_filter = (
-        "choice_field",
-        "editable",
-        "field_type",
-        "content_type",
-        "filterable",
-    )
-    search_fields = ("label", "identifier")
-
-
-@admin.register(models.CustomValue)
-class ValueAdmin(BaseAdmin, TranslationAdmin):
-    list_display = ["id", "__str__"]
-    search_fields = ("label", "value", "field__label", "field__identifier")
