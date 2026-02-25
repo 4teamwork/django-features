@@ -1,1 +1,1 @@
-0005_electiondistrict_person_election_district
+0007_inherit_from_custom_base_model

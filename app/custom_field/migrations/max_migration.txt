@@ -1,0 +1,1 @@
+0001_inherit_from_custom_base_model
