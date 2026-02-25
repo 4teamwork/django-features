@@ -1,10 +1,10 @@
 from django.contrib.contenttypes.models import ContentType
 from pluck import pluck
 
+from app.custom_field.tests.factories import CustomFieldFactory
 from app.models import Address
 from app.models import Person
 from app.tests import APITestCase
-from django_features.custom_fields.factories import CustomFieldFactory
 
 
 class CustomFieldViewSetTest(APITestCase):
