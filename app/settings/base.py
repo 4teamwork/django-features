@@ -161,3 +161,6 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
         }
 
     SECRET_KEY = values.SecretValue()
+
+    CUSTOM_FIELD_MODEL = values.Value("custom_field.CustomField")
+    CUSTOM_FIELD_VALUE_MODEL = values.Value("custom_field.CustomValue")
