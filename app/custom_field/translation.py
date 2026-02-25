@@ -1,7 +1,7 @@
 from modeltranslation.decorators import register
 from modeltranslation.translator import TranslationOptions
 
-from django_features.custom_fields import models
+from app.custom_field import models
 
 
 @register(models.CustomField)
