@@ -11,6 +11,11 @@ def get_custom_field_model() -> type[Model]:
     """
     Return the CustomField model that is active in this project.
     """
+    if settings.CUSTOM_FIELD_MODEL is None:
+        raise ImproperlyConfigured(
+            "CUSTOM_FIELD_MODEL and CUSTOM_FIELD_VALUE_MODEL must be defined in settings to use the custom fields app."
+        )
+
     try:
         return django_apps.get_model(settings.CUSTOM_FIELD_MODEL, require_ready=False)  # type: ignore[unused-ignore]
     except ValueError:
@@ -31,6 +36,11 @@ def get_custom_value_model() -> type[Model]:
     """
     Return the CustomValue model that is active in this project.
     """
+    if settings.CUSTOM_FIELD_VALUE_MODEL is None:
+        raise ImproperlyConfigured(
+            "CUSTOM_FIELD_MODEL and CUSTOM_FIELD_VALUE_MODEL must be defined in settings to use the custom fields app."
+        )
+
     try:
         return django_apps.get_model(  # type: ignore[unused-ignore]
             settings.CUSTOM_FIELD_VALUE_MODEL, require_ready=False
