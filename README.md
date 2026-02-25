@@ -3,13 +3,13 @@ A collection of fearures used in our Django-based web applications
 
 [Changelog](CHANGELOG.md)
 
-## Installation
+# Installation
 
 ``` bash
 pip install ftw-django-features
 ```
 
-## Usage
+# Usage
 
 Add desired app to `INSTALLED_APPS` in your Django project.
 
@@ -19,7 +19,7 @@ django_features.system_message
 django_features.custom_fields
 ```
 
-## Configuration
+# Configuration
 
 If you want to use `django_features`, your base configuration class should inherit from `django_features.settings.BaseConfiguration`.
 
@@ -31,7 +31,7 @@ class Base(BaseConfiguration):
     ...
 ```
 
-### Custom Fields
+## Custom Fields
 
 To use all features of the `django_features.custom_fields` app, the following steps are required:
 
@@ -41,24 +41,32 @@ Add the `django_features.custom_fields.routers.custom_field_router` to your `ROO
 path("api/", include(custom_field_router.urls)),
 ```
 
-#### Models
+### Create your own custom field and value models
 
-Your models should inherit from `django_features.custom_fields.models.CustomFieldBaseModel`.
+1. You need to create a custom field model and a custom value model.
+2. Your custom field model should inherit from `django_features.custom_fields.models.field.AbstractBaseCustomField`.
+3. Your custom value model should inherit from `django_features.custom_fields.models.value.AbstractBaseCustomValue`.
 
-#### Swappable
+### Configuration
 
-You can swap the models used by the `django_features.custom_fields` app by setting the `CUSTOM_FIELD_MODEL` or `CUSTOM_FIELD_VALUE_MODEL` setting.
-The swapped models should inherit from `django_features.custom_fields.models.field.AbstractBaseCustomField` or `django_features.custom_fields.models.value.AbstractBaseCustomValue`.
+- You can configure the models used by the `django_features.custom_fields` app by setting the `CUSTOM_FIELD_MODEL` or `CUSTOM_FIELD_VALUE_MODEL` setting.
+- The swapped models should inherit from `django_features.custom_fields.models.field.AbstractBaseCustomField` or `django_features.custom_fields.models.value.AbstractBaseCustomValue`.
+
+### Models with custom values
+
+1. Your models with custom values should inherit from `django_features.custom_fields.models.CustomFieldBaseModel`.
+2. Your models should have a relation to the custom value model. For example:
+    - `custom_values = models.ManyToManyField(blank=True, to=CustomValue, verbose_name=_("Benutzerdefinierte Werte"))`
 
 #### Querysets
 
-Your querysets should inherit from `django_features.custom_fields.models.CustomFieldModelBaseManager`.
+Your querysets for the models with custom values should inherit from `django_features.custom_fields.models.CustomFieldModelBaseManager`.
 
 #### Serializers
 
-Your serializers should inherit from `django_features.custom_fields.serializers.CustomFieldBaseModelSerializer`.
+Your serializers for the models with custom values should inherit from `django_features.custom_fields.serializers.CustomFieldBaseModelSerializer`.
 
-### System Message
+## System Message
 
 If you want to use `django_features.system_message`, your base configuration class should inherit from `django_features.system_message.settings.SystemMessageConfigurationMixin`.
 
@@ -85,7 +93,7 @@ Add the `django_features.system_message.routers.system_message_router` to your `
 path("api/", include(system_message_router.urls)),
 ```
 
-## Development
+# Development
 
 Installing dependencies, assuming you have poetry installed:
 
@@ -93,7 +101,7 @@ Installing dependencies, assuming you have poetry installed:
 poetry install
 ```
 
-## Release
+# Release
 
 This package uses towncrier to manage the changelog, and to introduce new changes, a file with a concise title and a brief explanation of what the change accomplishes should be created in the `changes` directory, with a suffix indicating whether the change is a feature, bugfix, or other.
 
