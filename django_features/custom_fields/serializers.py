@@ -7,26 +7,23 @@ from rest_framework.fields import empty
 
 from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.helpers import get_custom_value_model
-from django_features.custom_fields.models import CustomField
 from django_features.custom_fields.models import CustomFieldBaseModel
-from django_features.custom_fields.models import CustomValue
-
-
-CustomValueModel = get_custom_value_model()
+from django_features.custom_fields.models.field import AbstractBaseCustomField
+from django_features.custom_fields.models.value import AbstractBaseCustomValue
 
 
 class CustomChoiceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CustomValueModel
+        model = get_custom_value_model()
         fields = ["id", "label", "value"]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        if isinstance(self.instance, CustomValueModel):
+        if isinstance(self.instance, AbstractBaseCustomValue):
             field = self.instance.field
-            self.fields["value"] = CustomField.TYPE_SERIALIZER_MAP[field.field_type](
-                allow_null=True, read_only=True, required=False
-            )
+            self.fields["value"] = get_custom_field_model().TYPE_SERIALIZER_MAP[
+                field.field_type
+            ](allow_null=True, read_only=True, required=False)
 
 
 class CustomFieldSerializer(serializers.ModelSerializer):
@@ -51,7 +48,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             "filterable",
         ]
 
-    def get_choices(self, obj: CustomField) -> list:
+    def get_choices(self, obj: AbstractBaseCustomField) -> list:
         return CustomChoiceSerializer(obj.choices, many=True).data
 
 
@@ -150,15 +147,15 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data: dict) -> Any:
-        custom_value_instances: list[CustomValue] = []
-        choices: list[CustomValue] = []
+        custom_value_instances: list[AbstractBaseCustomValue] = []
+        choices: list[AbstractBaseCustomValue] = []
         for field in self._custom_fields:
             value = validated_data.pop(field.identifier, None)
             if value is None:
                 continue
             if not field.choice_field:
                 custom_value_instances.append(
-                    CustomValueModel(
+                    get_custom_value_model()(
                         field_id=field.id,
                         value=self.fields[field.identifier].to_representation(value),
                     )
@@ -170,7 +167,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     choices.append(value)
         instance = super().create(validated_data)
         if custom_value_instances or choices:
-            custom_values = CustomValueModel.objects.bulk_create(custom_value_instances)
+            custom_values = get_custom_value_model().objects.bulk_create(
+                custom_value_instances
+            )
             custom_values.extend(choices)
             instance.custom_values.set(custom_values)
         return instance
@@ -191,9 +190,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             else:
                 value_object.value = value
                 value_object.save()
-        except CustomValueModel.DoesNotExist:
+        except get_custom_value_model().DoesNotExist:
             if value is not None:
-                value_object = CustomValueModel.objects.create(
+                value_object = get_custom_value_model().objects.create(
                     field_id=field.id, value=value
                 )
                 instance.custom_values.add(value_object)

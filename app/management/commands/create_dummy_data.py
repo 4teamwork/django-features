@@ -4,9 +4,9 @@ from typing import Any
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import BaseCommand
 
+from app.custom_field.models import CustomField
+from app.custom_field.models import CustomValue
 from app.models import Person
-from django_features.custom_fields.models import CustomField
-from django_features.custom_fields.models import CustomValue
 
 
 class Command(BaseCommand):

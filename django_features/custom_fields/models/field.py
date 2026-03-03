@@ -6,7 +6,6 @@ from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
-from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models.value import CustomValueQuerySet
 
 
@@ -126,15 +125,18 @@ class AbstractBaseCustomField(TimeStampedModel):
 
     @property
     def choices(self) -> CustomValueQuerySet:
-        custom_value_model = get_custom_value_model()
+        from django_features.custom_fields.helpers import get_custom_value_model
 
+        custom_value_model = get_custom_value_model()
         if not self.choice_field:
             return custom_value_model.objects.none()
         return custom_value_model.objects.filter(field=self)
 
     @property
     def output_field(self) -> models.Field:
-        output_field = CustomField.TYPE_FIELD_MAP.get(self.field_type)
+        from django_features.custom_fields.helpers import get_custom_field_model
+
+        output_field = get_custom_field_model().TYPE_FIELD_MAP.get(self.field_type)
         if not output_field:
             raise ValueError(f"Unknown field type: {self.field_type}")
 
@@ -174,11 +176,3 @@ class AbstractBaseCustomField(TimeStampedModel):
         if not sql_field:
             raise ValueError(f"Unknown field type: {self.field_type}")
         return sql_field
-
-
-class CustomField(AbstractBaseCustomField):
-    class Meta:
-        verbose_name = _("Benutzerdefiniertes Feld")
-        verbose_name_plural = _("Benutzerdefinierte Felder")
-        ordering = ["order", "created"]
-        swappable = "CUSTOM_FIELD_MODEL"

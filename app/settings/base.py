@@ -27,6 +27,7 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
             "rest_framework",
             "django_features.custom_fields",
             "django_features.system_message",
+            "app.custom_field",
             "app",
         ]
         return installed_apps
@@ -160,3 +161,6 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
         }
 
     SECRET_KEY = values.SecretValue()
+
+    CUSTOM_FIELD_MODEL = values.Value("custom_field.CustomField")
+    CUSTOM_FIELD_VALUE_MODEL = values.Value("custom_field.CustomValue")

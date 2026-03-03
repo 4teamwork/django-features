@@ -2,10 +2,10 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
-from django_features.custom_fields.models import CustomFieldBaseModel
+from app.custom_field.models.base import CustomBaseModel
 
 
-class Address(CustomFieldBaseModel):
+class Address(CustomBaseModel):
     city = models.CharField(verbose_name="city", blank=True)
     country = models.CharField(verbose_name="country", blank=True)
     street = models.CharField(verbose_name="street", blank=True)

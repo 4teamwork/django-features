@@ -4,15 +4,15 @@ from datetime import timezone
 
 from django.contrib.contenttypes.models import ContentType
 
+from app.custom_field.models import CustomField
+from app.custom_field.models import CustomValue
+from app.custom_field.tests.factories import CustomFieldFactory
+from app.custom_field.tests.factories import CustomValueFactory
 from app.models import Person
 from app.models import PersonType
 from app.tests import APITestCase
 from app.tests.factories import PersonFactory
 from app.tests.factories import PersonTypeFactory
-from django_features.custom_fields.factories import CustomFieldFactory
-from django_features.custom_fields.factories import CustomValueFactory
-from django_features.custom_fields.models import CustomField
-from django_features.custom_fields.models import CustomValue
 
 
 class CustomFieldBaseModelTest(APITestCase):

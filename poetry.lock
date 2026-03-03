@@ -1742,4 +1742,4 @@ towncrier = ">=19.9.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12, <4"
-content-hash = "6e8b4bc9ef672b6855d3f0235cbd63adc65c0cd20156d6e4a0cb9c0fd4eb147d"
+content-hash = "01aac60b934ae6f9321d2f7692a8be19fc184e90e20f9bb05456ca688e6058ed"

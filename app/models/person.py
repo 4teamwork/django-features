@@ -1,11 +1,11 @@
 from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 
-from django_features.custom_fields.models import CustomFieldBaseModel
-from django_features.custom_fields.models.base import CustomFieldTypeBaseModel
+from app.custom_field.models.base import CustomBaseModel
+from app.custom_field.models.base import CustomTypeBaseModel
 
 
-class PersonType(CustomFieldTypeBaseModel):
+class PersonType(CustomTypeBaseModel):
     title = models.CharField(verbose_name="title", max_length=255)
 
     class Meta:
@@ -13,7 +13,7 @@ class PersonType(CustomFieldTypeBaseModel):
         verbose_name_plural = "Person types"
 
 
-class Person(CustomFieldBaseModel):
+class Person(CustomBaseModel):
     _custom_field_type_attr = "person_type"
 
     addresses = GenericRelation("Address", "target_id", "target_type")

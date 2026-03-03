@@ -3,7 +3,7 @@ from factory import lazy_attribute  # type: ignore
 from factory import SubFactory  # type: ignore
 from factory.django import DjangoModelFactory
 
-from django_features.custom_fields import models
+from app.custom_field import models
 
 
 class CustomFieldFactory(DjangoModelFactory):

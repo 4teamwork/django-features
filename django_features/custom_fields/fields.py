@@ -7,8 +7,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.utils.model_meta import get_field_info
 
 from django_features.custom_fields.helpers import get_custom_value_model
-from django_features.custom_fields.models import CustomField
-from django_features.custom_fields.models import CustomValue
+from django_features.custom_fields.models.field import AbstractBaseCustomField
+from django_features.custom_fields.models.value import AbstractBaseCustomValue
 from django_features.custom_fields.models.value import CustomValueQuerySet
 from django_features.custom_fields.serializers import CustomChoiceSerializer
 
@@ -17,7 +17,10 @@ class ChoiceIdField(serializers.Field):
     _unique_field: str | None = None
 
     def __init__(
-        self, field: CustomField, unique_field: str | None = None, **kwargs: Any
+        self,
+        field: AbstractBaseCustomField,
+        unique_field: str | None = None,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.field = field
@@ -37,11 +40,11 @@ class ChoiceIdField(serializers.Field):
         return get_custom_value_model().objects.filter(field_id=self.field.id)
 
     def to_representation(
-        self, value: CustomValue | CustomValueQuerySet
+        self, value: AbstractBaseCustomValue | CustomValueQuerySet
     ) -> int | list[int]:
         return CustomChoiceSerializer(value, many=self.field.multiple).data
 
-    def _choice_field(self, data: int | str | dict) -> CustomValue:
+    def _choice_field(self, data: int | str | dict) -> AbstractBaseCustomValue:
         if isinstance(data, dict):
             value = data.get("id")
         else:
@@ -66,7 +69,9 @@ class ChoiceIdField(serializers.Field):
             )
         return values
 
-    def to_internal_value(self, data: Any) -> CustomValue | CustomValueQuerySet:
+    def to_internal_value(
+        self, data: Any
+    ) -> AbstractBaseCustomValue | CustomValueQuerySet:
         if self.field.multiple and isinstance(data, list):
             return self._multiple_choice(data)
         elif self.field.choice_field and isinstance(data, (int, str, dict)):
