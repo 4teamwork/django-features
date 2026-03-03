@@ -1,4 +1,12 @@
 
+2026.3.0 (2026-03-03)
+---------------------
+
+New features:
+
+- Removes the predefined custom field and value models and reverts the swappable feature. (`TI-3652 <https://4teamwork.atlassian.net/browse/TI-3652>`_)
+
+
 2026.2.0 (2026-02-13)
 ---------------------
 
