@@ -4,8 +4,8 @@ from django.utils.translation import gettext_lazy as _
 
 from app.custom_field.models import CustomField
 from app.custom_field.models import CustomValue
-from django_features.custom_fields.models import CustomFieldBaseModel
-from django_features.custom_fields.models import CustomFieldTypeBaseModel
+from django_features.custom_fields.models.base import CustomFieldBaseModel
+from django_features.custom_fields.models.base import CustomFieldTypeBaseModel
 
 
 class CustomTypeBaseModel(CustomFieldTypeBaseModel):

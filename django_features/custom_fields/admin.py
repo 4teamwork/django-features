@@ -5,8 +5,8 @@ from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.http import HttpRequest
 
-from django_features.custom_fields.models import CustomFieldBaseModel
-from django_features.custom_fields.models import CustomFieldTypeBaseModel
+from django_features.custom_fields.models.base import CustomFieldBaseModel
+from django_features.custom_fields.models.base import CustomFieldTypeBaseModel
 
 
 class BaseAdmin(admin.ModelAdmin):

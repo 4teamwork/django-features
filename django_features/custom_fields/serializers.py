@@ -7,7 +7,7 @@ from rest_framework.fields import empty
 
 from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.helpers import get_custom_value_model
-from django_features.custom_fields.models import CustomFieldBaseModel
+from django_features.custom_fields.models.base import CustomFieldBaseModel
 from django_features.custom_fields.models.field import AbstractBaseCustomField
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
 
