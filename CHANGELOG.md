@@ -1,4 +1,12 @@
 
+2026.3.1 (2026-03-11)
+---------------------
+
+Bug fixes:
+
+- Remove imports in django_features.custom_fields.models.__init__.py to fix circular imports.
+
+
 2026.3.0 (2026-03-03)
 ---------------------
 
