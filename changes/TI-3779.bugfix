@@ -1,0 +1,1 @@
+Renames the `PropertySerializer` to `PropertySerializerMixin` and `DataMappingSerializer` to `DataMappingSerializerMixin`. (`TI-3779 <https://4teamwork.atlassian.net/browse/TI-3779>`_)
