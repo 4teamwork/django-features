@@ -10,7 +10,7 @@ class TestMappingSerializer(MappingSerializer):
         model = models.Person
         fields = "__all__"
 
-    @property
+    @property  # type: ignore[misc]
     def mapping(self) -> dict[str, dict[str, Any]]:
         return {
             "person": {
