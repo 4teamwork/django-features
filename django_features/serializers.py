@@ -13,7 +13,7 @@ from django_features.custom_fields.serializers import CustomFieldBaseModelSerial
 from django_features.fields import UUIDRelatedField
 
 
-class PropertySerializer(serializers.Serializer):
+class PropertySerializerMixin:
     relation_separator: str = "."
 
     class Meta:
@@ -72,7 +72,7 @@ class PropertySerializer(serializers.Serializer):
         self._model = value
 
 
-class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializer):
+class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMixin):
     serializer_related_field = UUIDRelatedField
     serializer_related_fields: dict[str, Any] = {}
 
@@ -210,7 +210,7 @@ class NestedMappingSerializer(BaseMappingSerializer):
         super().__init__(*args, **kwargs)
 
 
-class DataMappingSerializer(PropertySerializer):
+class DataMappingSerializerMixin(PropertySerializerMixin):
     _default_prefix = "default"
     _format_prefix = "format"
 
@@ -254,7 +254,7 @@ class DataMappingSerializer(PropertySerializer):
                 value = format_func(value)
             internal_field_path = internal_name.split(self.relation_separator)
             if value is None:
-                if self.instance is None:
+                if getattr(self, "instance") is None:
                     continue
                 else:
                     try:
@@ -269,7 +269,7 @@ class DataMappingSerializer(PropertySerializer):
         return data
 
 
-class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializer):
+class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializerMixin):
     def __init__(self, data: Any = empty, *args: Any, **kwargs: Any) -> None:
         self.instance = None
         self.mapping = kwargs.pop("mapping", {})
@@ -285,7 +285,7 @@ class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerialize
         return list_data
 
 
-class MappingSerializer(BaseMappingSerializer, DataMappingSerializer):
+class MappingSerializer(BaseMappingSerializer, DataMappingSerializerMixin):
     list_serializer_class = ListDataMappingSerializer
 
     class Meta:
