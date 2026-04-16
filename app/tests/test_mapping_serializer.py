@@ -4,6 +4,8 @@ from datetime import timezone
 
 from constance.test import override_config
 from django.contrib.contenttypes.models import ContentType
+from rest_framework.exceptions import ErrorDetail
+from rest_framework.exceptions import ValidationError
 
 from app.models import ElectionDistrict
 from app.models import Municipality
@@ -299,3 +301,36 @@ class MappingSerializerTestCase(APITestCase):
         self.assertEqual(1, stefanie.addresses.count())
         self.assertEqual(hugo, hugo.addresses.first().target)
         self.assertEqual(stefanie, stefanie.addresses.last().target)
+
+    @override_config(MODEL_MAPPING_FIELD=MODEL_MAPPING_FIELD)
+    def test_list_mapping_serializer_validation_error(self) -> None:
+        data = [
+            {"external_lastname": "Boss"},
+            {"external_lastname": "Muster"},
+        ]
+
+        serializer = PersonMappingSerializer(data=data, many=True)
+        with self.assertRaises(ValidationError) as exception:
+            serializer.is_valid(raise_exception=True)
+
+        self.assertEqual(
+            exception.exception.detail,
+            [
+                {
+                    "firstname": [
+                        ErrorDetail(
+                            string="Dieses Feld ist zwingend erforderlich.",
+                            code="required",
+                        )
+                    ]
+                },
+                {
+                    "firstname": [
+                        ErrorDetail(
+                            string="Dieses Feld ist zwingend erforderlich.",
+                            code="required",
+                        )
+                    ]
+                },
+            ],
+        )

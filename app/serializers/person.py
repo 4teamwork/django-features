@@ -30,6 +30,6 @@ class PersonMappingSerializer(BaseMappingSerializer):
         model = Person
         fields = "__all__"
 
-    @property
+    @property  # type: ignore[misc]
     def mapping(self) -> dict[str, dict[str, Any]]:
         return config.MODEL_MAPPING_FIELD
