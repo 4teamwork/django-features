@@ -1,4 +1,13 @@
 
+2026.1.1 (2026-04-16)
+---------------------
+
+Bug fixes:
+
+- Renames the `PropertySerializer` to `PropertySerializerMixin` and `DataMappingSerializer` to `DataMappingSerializerMixin`. (`TI-3779 <https://4teamwork.atlassian.net/browse/TI-3779>`_)
+- The `PropertySerializerMixin` and the `DataMappingSerializerMixin` do not inherit from rest_framework.serializers.Serializer. (`TI-3779 <https://4teamwork.atlassian.net/browse/TI-3779>`_)
+
+
 2026.1.0 (2026-02-13)
 ---------------------
 

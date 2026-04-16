@@ -1,1 +1,0 @@
-The `PropertySerializerMixin` and the `DataMappingSerializerMixin` do not inherit from rest_framework.serializers.Serializer. (`TI-3779 <https://4teamwork.atlassian.net/browse/TI-3779>`_)
