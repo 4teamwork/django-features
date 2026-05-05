@@ -1,4 +1,14 @@
 
+2026.3.2 (2026-05-05)
+---------------------
+
+Bug fixes:
+
+- Renames the `PropertySerializer` to `PropertySerializerMixin` and `DataMappingSerializer` to `DataMappingSerializerMixin`. (`TI-3779 <https://4teamwork.atlassian.net/browse/TI-3779>`_)
+- The `PropertySerializerMixin` and the `DataMappingSerializerMixin` do not inherit from rest_framework.serializers.Serializer. (`TI-3779 <https://4teamwork.atlassian.net/browse/TI-3779>`_)
+- The “allow_blank” attribute is now correctly set for the custom field serializer field.
+
+
 2026.3.1 (2026-03-11)
 ---------------------
 
