@@ -1,3 +1,5 @@
+import inspect
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
@@ -160,6 +162,12 @@ class AbstractBaseCustomField(TimeStampedModel):
         serializer_field = self.TYPE_SERIALIZER_MAP.get(self.field_type)
         if serializer_field is None:
             raise ValueError(f"Unknown field type: {self.field_type}")
+
+        serializer_field_params = inspect.signature(
+            serializer_field.__init__
+        ).parameters
+        if "allow_blank" in serializer_field_params:
+            params["allow_blank"] = self.allow_blank
 
         if self.default and not self.required:
             params.pop("required")
