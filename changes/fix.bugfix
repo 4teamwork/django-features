@@ -1,0 +1,1 @@
+The “allow_blank” attribute is now correctly set for the custom field serializer field.
