@@ -4,7 +4,6 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import NOT_PROVIDED
 from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
@@ -216,9 +215,9 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
 
     def _get_nested_data(self, field_path: list[str], data: Any) -> tuple[Any, bool]:
         field_name = field_path[0]
-        if not isinstance(data, dict):
+        if not isinstance(data, dict) or field_name not in data:
             return None, False
-        value = data.get(field_name, None)
+        value = data[field_name]
         if len(field_path) > 1:
             return self._get_nested_data(field_path[1:], value)
         return value, True
@@ -253,16 +252,6 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
             if format_func is not None:
                 value = format_func(value)
             internal_field_path = internal_name.split(self.relation_separator)
-            if value is None:
-                if getattr(self, "instance") is None:
-                    continue
-                else:
-                    try:
-                        field = self.model._meta.get_field(internal_field_path[0])
-                        if not field.null and field.default != NOT_PROVIDED:
-                            continue
-                    except FieldDoesNotExist:
-                        pass
             data.update(
                 self._get_data_with_internal_key(internal_field_path, data, value)
             )
