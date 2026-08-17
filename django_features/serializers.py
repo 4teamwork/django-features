@@ -4,7 +4,6 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import NOT_PROVIDED
 from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
@@ -132,10 +131,13 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
                         ),
                         required=False,
                     )
+        initial_data = getattr(self, "initial_data", {})
+        if not isinstance(initial_data, dict):
+            initial_data = {}
         for field_name, field in nested_fields.items():
-            nested_data = self.initial_data.get(field_name)
+            nested_data = initial_data.get(field_name, empty)
             if not isinstance(nested_data, dict):
-                continue
+                nested_data = empty
             self.related_fields.add(field_name)
             fields[field_name] = NestedMappingSerializer(
                 data=nested_data,
@@ -155,11 +157,12 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
     def create(self, validated_data: dict[str, Any]) -> models.Model:
         relations_to_save: dict[str, Any] = {}
         for field in self.related_fields:
-            value = validated_data.pop(field, None)
+            if field not in validated_data:
+                continue
+            value = validated_data.pop(field)
             serializer = self.fields.get(field)
             if isinstance(serializer, NestedMappingSerializer):
-                serializer.is_valid(raise_exception=True)
-                relations_to_save[field] = serializer.save()
+                relations_to_save[field] = serializer.create(value)
             elif value is not None:
                 relations_to_save[field] = value
         instance = super().create(validated_data)
@@ -176,11 +179,12 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
         self, instance: models.Model, validated_data: dict[str, Any]
     ) -> models.Model:
         for field in self.related_fields:
-            value = validated_data.pop(field, None)
+            if field not in validated_data:
+                continue
+            value = validated_data.pop(field)
             serializer = self.fields.get(field)
             if isinstance(serializer, NestedMappingSerializer):
-                serializer.is_valid(raise_exception=True)
-                value = serializer.save()
+                value = serializer.create(value)
             model_field = self.model._meta.get_field(field)
             if model_field.many_to_many or model_field.one_to_many:
                 getattr(instance, field).set(value)
@@ -206,19 +210,24 @@ class NestedMappingSerializer(BaseMappingSerializer):
         self.exclude = exclude
         self.mapping_fields = nested_fields
         self.mapping = parent_mapping
-        self.Meta.model = field.related_model
+
+        class Meta(self.Meta):  # type: ignore[name-defined]
+            model = field.related_model
+
+        setattr(self, "Meta", Meta)
         super().__init__(*args, **kwargs)
 
 
 class DataMappingSerializerMixin(PropertySerializerMixin):
     _default_prefix = "default"
     _format_prefix = "format"
+    unmapped_data: Any
 
     def _get_nested_data(self, field_path: list[str], data: Any) -> tuple[Any, bool]:
         field_name = field_path[0]
-        if not isinstance(data, dict):
+        if not isinstance(data, dict) or field_name not in data:
             return None, False
-        value = data.get(field_name, None)
+        value = data[field_name]
         if len(field_path) > 1:
             return self._get_nested_data(field_path[1:], value)
         return value, True
@@ -237,36 +246,36 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
         return {field_name: value}
 
     def map_data(self, initial_data: Any) -> Any:
-        data: dict[str, Any] = {}
-        for external_name, internal_name in self.model_mapping.items():
-            external_field_path = external_name.split(self.relation_separator)
-            value, found = self._get_nested_data(external_field_path, initial_data)
-            if not found:
-                default_func = getattr(
-                    self, f"{self._default_prefix}_{internal_name}", None
+        if not isinstance(initial_data, dict):
+            return initial_data
+
+        previous_unmapped_data = getattr(self, "unmapped_data", empty)
+        self.unmapped_data = initial_data
+        try:
+            data: dict[str, Any] = {}
+            for external_name, internal_name in self.model_mapping.items():
+                external_field_path = external_name.split(self.relation_separator)
+                value, found = self._get_nested_data(external_field_path, initial_data)
+                if not found:
+                    default_func = getattr(
+                        self, f"{self._default_prefix}_{internal_name}", None
+                    )
+                    if default_func is not None:
+                        value = default_func()
+                    else:
+                        continue
+                format_func = getattr(
+                    self, f"{self._format_prefix}_{internal_name}", None
                 )
-                if default_func is not None:
-                    value = default_func()
-                else:
-                    continue
-            format_func = getattr(self, f"{self._format_prefix}_{internal_name}", None)
-            if format_func is not None:
-                value = format_func(value)
-            internal_field_path = internal_name.split(self.relation_separator)
-            if value is None:
-                if getattr(self, "instance") is None:
-                    continue
-                else:
-                    try:
-                        field = self.model._meta.get_field(internal_field_path[0])
-                        if not field.null and field.default != NOT_PROVIDED:
-                            continue
-                    except FieldDoesNotExist:
-                        pass
-            data.update(
-                self._get_data_with_internal_key(internal_field_path, data, value)
-            )
-        return data
+                if format_func is not None:
+                    value = format_func(value)
+                internal_field_path = internal_name.split(self.relation_separator)
+                data.update(
+                    self._get_data_with_internal_key(internal_field_path, data, value)
+                )
+            return data
+        finally:
+            self.unmapped_data = previous_unmapped_data
 
 
 class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializerMixin):
@@ -275,14 +284,17 @@ class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerialize
         self.mapping = kwargs.pop("mapping", {})
         self.model = kwargs.pop("model")
         self.unmapped_data = data if data is not empty else []
-        mapped_data = self.map_list_data(self.unmapped_data)
-        super().__init__(data=mapped_data, *args, **kwargs)
+        super().__init__(data=data, *args, **kwargs)
+        if data is not empty:
+            self.initial_data = self.map_list_data(data)
 
-    def map_list_data(self, initial_data: Any) -> list[Any]:
-        list_data: list[dict[str, Any]] = []
-        for item in initial_data:
-            list_data.append(self.map_data(item))
-        return list_data
+    def map_data(self, initial_data: Any) -> Any:
+        return self.child.map_data(initial_data)
+
+    def map_list_data(self, initial_data: Any) -> Any:
+        if not isinstance(initial_data, list):
+            return initial_data
+        return [self.map_data(item) for item in initial_data]
 
 
 class MappingSerializer(BaseMappingSerializer, DataMappingSerializerMixin):
