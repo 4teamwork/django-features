@@ -1,4 +1,18 @@
 
+2026.4.0 (2026-08-17)
+---------------------
+
+Bug fixes:
+
+- Distinguish omitted mapping inputs from explicit ``None`` values. Explicit nulls are
+  now passed to serializer fields so that ``allow_null`` controls validation. Formatters
+  are no longer called for omitted inputs unless a corresponding ``default_<field>()``
+  method supplies a value; consumers that used formatters to default missing inputs
+  should move that behavior into the supported default method. List mappings now apply
+  these default and formatter hooks consistently to each item, including nested relation
+  mappings.
+
+
 2026.3.3 (2026-05-07)
 ---------------------
 
