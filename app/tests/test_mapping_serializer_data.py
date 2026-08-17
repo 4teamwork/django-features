@@ -232,6 +232,20 @@ class MappingSerializerTestCase(APITestCase):
             ],
         )
 
+    def test_many_hooks_receive_current_unmapped_item(self) -> None:
+        data = [
+            {"title": "Dr.", "external_nullable": "Boss"},
+            {"title": "Prof.", "fallback_lastname": "Muster"},
+        ]
+
+        serializer = ContextAwareMappingSerializer(data=data, many=True)
+
+        self.assertEqual(
+            serializer.initial_data,
+            [{"lastname": "Dr. Boss"}, {"lastname": "Prof. Muster"}],
+        )
+        self.assertEqual(serializer.child.unmapped_data, data)
+
     def test_many_calls_default_once_per_missing_item(self) -> None:
         serializer = DefaultFieldMappingSerializer(
             data=[{}, {"external_nullable": None}, {}], many=True

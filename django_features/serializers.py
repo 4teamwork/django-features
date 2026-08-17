@@ -221,6 +221,7 @@ class NestedMappingSerializer(BaseMappingSerializer):
 class DataMappingSerializerMixin(PropertySerializerMixin):
     _default_prefix = "default"
     _format_prefix = "format"
+    unmapped_data: Any
 
     def _get_nested_data(self, field_path: list[str], data: Any) -> tuple[Any, bool]:
         field_name = field_path[0]
@@ -248,26 +249,33 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
         if not isinstance(initial_data, dict):
             return initial_data
 
-        data: dict[str, Any] = {}
-        for external_name, internal_name in self.model_mapping.items():
-            external_field_path = external_name.split(self.relation_separator)
-            value, found = self._get_nested_data(external_field_path, initial_data)
-            if not found:
-                default_func = getattr(
-                    self, f"{self._default_prefix}_{internal_name}", None
+        previous_unmapped_data = getattr(self, "unmapped_data", empty)
+        self.unmapped_data = initial_data
+        try:
+            data: dict[str, Any] = {}
+            for external_name, internal_name in self.model_mapping.items():
+                external_field_path = external_name.split(self.relation_separator)
+                value, found = self._get_nested_data(external_field_path, initial_data)
+                if not found:
+                    default_func = getattr(
+                        self, f"{self._default_prefix}_{internal_name}", None
+                    )
+                    if default_func is not None:
+                        value = default_func()
+                    else:
+                        continue
+                format_func = getattr(
+                    self, f"{self._format_prefix}_{internal_name}", None
                 )
-                if default_func is not None:
-                    value = default_func()
-                else:
-                    continue
-            format_func = getattr(self, f"{self._format_prefix}_{internal_name}", None)
-            if format_func is not None:
-                value = format_func(value)
-            internal_field_path = internal_name.split(self.relation_separator)
-            data.update(
-                self._get_data_with_internal_key(internal_field_path, data, value)
-            )
-        return data
+                if format_func is not None:
+                    value = format_func(value)
+                internal_field_path = internal_name.split(self.relation_separator)
+                data.update(
+                    self._get_data_with_internal_key(internal_field_path, data, value)
+                )
+            return data
+        finally:
+            self.unmapped_data = previous_unmapped_data
 
 
 class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializerMixin):
