@@ -16,6 +16,26 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: app/custom_field/models/base.py app/custom_field/models/value.py
+msgid "Benutzerdefinierte Werte"
+msgstr "Valeurs personnalisées"
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefiniertes Feld"
+msgstr "Champ personnalisé"
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefinierte Felder"
+msgstr "Champs personnalisés"
+
+#: app/custom_field/models/value.py
+msgid "Feld"
+msgstr "Champ"
+
+#: app/custom_field/models/value.py
+msgid "Benutzerdefinierter Wert"
+msgstr "Valeur personnalisée"
+
 #: app/settings/base.py
 msgid "Deutsch"
 msgstr "Allemand"
@@ -28,10 +48,49 @@ msgstr "Anglais"
 msgid "Französisch"
 msgstr "Français"
 
-#: django_features/custom_fields/models/base.py
-#: django_features/custom_fields/models/value.py
-msgid "Benutzerdefinierte Werte"
-msgstr "Valeurs personnalisées"
+#: django_features/custom_fields/fields.py
+msgid "This list may not be empty."
+msgstr "Cette liste ne peut pas être vide."
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Multiple custom values match '%(field)s': %(values)s. Choice lookup values must be unique within a custom field."
+msgstr "Plusieurs valeurs personnalisées correspondent à « %(field)s » : %(values)s. Les valeurs de référence des choix doivent être uniques dans un champ personnalisé."
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Custom value with the %(field)s %(value)s does not exist."
+msgstr "La valeur personnalisée avec %(field)s %(value)s n’existe pas."
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Malformed custom choice. Expected a value or object containing '%(field)s'."
+msgstr "Choix personnalisé incorrect. Une valeur ou un objet contenant « %(field)s » était attendu."
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Malformed custom choice %(value)r for '%(field)s'."
+msgstr "Choix personnalisé incorrect %(value)r pour « %(field)s »."
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Duplicate custom choice values are not allowed: %(values)s"
+msgstr "Les valeurs de choix personnalisées en double ne sont pas autorisées : %(values)s"
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Some custom choices do not exist for '%(field)s': %(values)s"
+msgstr "Certaines valeurs de choix personnalisées n’existent pas pour « %(field)s » : %(values)s"
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "The field %(field)s is not a choice field."
+msgstr "Le champ %(field)s n’est pas un champ de sélection."
+
+#: django_features/custom_fields/fields.py
+#, python-format
+msgid "Expected a list of custom choices, but got %(value)r."
+msgstr "Une liste de choix personnalisés était attendue, mais %(value)r a été reçu."
 
 #: django_features/custom_fields/models/field.py
 msgid "Text (einzeilig)"
@@ -90,17 +149,17 @@ msgid "Ausblenden"
 msgstr "Masquer"
 
 #: django_features/custom_fields/models/field.py
+msgid "Als Filter anbieten"
+msgstr "Proposer comme filtre"
+
+#: django_features/custom_fields/models/field.py
 #: django_features/system_message/models.py
 msgid "Name"
 msgstr "Nom"
 
 #: django_features/custom_fields/models/field.py
 msgid "Liste"
-msgstr ""
-
-#: django_features/custom_fields/models/field.py
-msgid "Mehrfachauswahlfeld"
-msgstr "Champ à choix multiples"
+msgstr "Liste"
 
 #: django_features/custom_fields/models/field.py
 #: django_features/custom_fields/models/value.py
@@ -112,31 +171,37 @@ msgstr "Ordre"
 msgid "Erforderlich"
 msgstr "Nécessaire"
 
-#: django_features/custom_fields/models/field.py
-msgid "Benutzerdefiniertes Feld"
-msgstr "Champ personnalisé"
-
-#: django_features/custom_fields/models/field.py
-msgid "Benutzerdefinierte Felder"
-msgstr "Champs personnalisés"
-
 #: django_features/custom_fields/models/value.py
-msgid "Feld"
-msgstr "Champ"
-
-#: django_features/custom_fields/models/value.py
-#, fuzzy
-#| msgid "Textfarbe"
-msgid "Text"
-msgstr "Texte"
+msgid "Label"
+msgstr "Libellé"
 
 #: django_features/custom_fields/models/value.py
 msgid "Wert"
 msgstr "Valeur"
 
-#: django_features/custom_fields/models/value.py
-msgid "Benutzerdefinierter Wert"
-msgstr "Valeur personnalisée"
+#: django_features/custom_fields/serializers.py
+msgid "This custom field does not belong to the selected type."
+msgstr "Ce champ personnalisé n’appartient pas au type sélectionné."
+
+#: django_features/custom_fields/serializers.py
+msgid "This custom field may not be changed manually."
+msgstr "Ce champ personnalisé ne peut pas être modifié manuellement."
+
+#: django_features/custom_fields/serializers.py
+msgid "The validated type does not match the submitted custom field type."
+msgstr "Le type validé ne correspond pas au type de champ personnalisé soumis."
+
+#: django_features/custom_fields/serializers.py
+msgid "The selected custom field type does not exist."
+msgstr "Le type de champ personnalisé sélectionné n’existe pas."
+
+#: django_features/fields.py
+msgid "Objekt existiert nicht."
+msgstr "L’objet n’existe pas."
+
+#: django_features/fields.py
+msgid "Inkorrekter Typ."
+msgstr "Type incorrect."
 
 #: django_features/system_message/models.py
 msgid "Icon"
@@ -189,3 +254,11 @@ msgstr "Message système"
 #: django_features/system_message/models.py
 msgid "Systemmeldungen"
 msgstr "Messages système"
+
+#~ msgid "Mehrfachauswahlfeld"
+#~ msgstr "Champ à choix multiples"
+
+#, fuzzy
+#~| msgid "Textfarbe"
+#~ msgid "Text"
+#~ msgstr "Texte"
