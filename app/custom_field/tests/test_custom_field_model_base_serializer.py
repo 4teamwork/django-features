@@ -84,7 +84,7 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
             field=self.multiple_choice_field, value="2002-01-01"
         )
 
-        self.person: Person = PersonFactory()  # type: ignore
+        self.person: Person = PersonFactory()
         self.person.refresh_with_custom_fields()
 
     def test_custom_field_base_model_serializer_data(self) -> None:
@@ -159,6 +159,16 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
         self.assertTrue(serializer.is_valid(raise_exception=True))
         instance = serializer.save()
 
+        self.assertEqual(serializer.data["char_value"], "Some char value")
+        self.assertEqual(
+            serializer.data["multiple_date_value"], data["multiple_date_value"]
+        )
+        self.assertEqual(serializer.data["choice_value"]["id"], self.choice_1.id)
+        self.assertEqual(
+            {choice["id"] for choice in serializer.data["multiple_choice_value"]},
+            {self.multiple_choice_1.id, self.multiple_choice_2.id},
+        )
+
         instance.refresh_with_custom_fields()
 
         self.assertEqual(instance.char_value, "Some char value")
@@ -183,6 +193,25 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
                 {"id": self.multiple_choice_2.id, "label": None, "value": "2001-01-01"},
             ],
         )
+
+    def test_create_representation_preserves_explicit_null_and_empty_values(
+        self,
+    ) -> None:
+        serializer = PersonSerializer(
+            data={
+                "firstname": "Empty",
+                "char_value": None,
+                "multiple_date_value": [],
+                "multiple_choice_value": [],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.assertIsNone(serializer.data["char_value"])
+        self.assertEqual(serializer.data["multiple_date_value"], [])
+        self.assertEqual(serializer.data["multiple_choice_value"], [])
 
     def test_custom_field_base_model_serializer_update(self) -> None:
         self.person.char_value = "Some char value"
@@ -266,6 +295,17 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
         serializer = PersonSerializer(self.person, data=data)
         self.assertTrue(serializer.is_valid())
         instance = serializer.save()
+
+        self.assertEqual(serializer.data["char_value"], "Some char value2")
+        self.assertEqual(
+            serializer.data["multiple_date_value"], data["multiple_date_value"]
+        )
+        self.assertEqual(serializer.data["choice_value"]["id"], self.choice_2.id)
+        self.assertEqual(
+            {choice["id"] for choice in serializer.data["multiple_choice_value"]},
+            {self.multiple_choice_1.id, self.multiple_choice_3.id},
+        )
+
         instance.refresh_with_custom_fields()
 
         self.assertEqual(instance.firstname, "John2")
@@ -391,8 +431,8 @@ class CustomFieldBaseModelSerializerTest(APITestCase):
         with self.assertRaises(ValidationError) as e:
             serializer.is_valid(raise_exception=True)
         self.assertEqual(
-            e.exception.detail,
-            {"required_field": ["Dieses Feld ist zwingend erforderlich."]},
+            e.exception.detail["required_field"][0].code,
+            "required",
         )
 
     def test_custom_field_base_model_serializer_blank_not_allowed(self) -> None:

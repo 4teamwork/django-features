@@ -9,6 +9,7 @@ from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
 
 from django_features.custom_fields.serializers import CustomFieldBaseModelSerializer
+from django_features.custom_fields.serializers import CustomFieldTypeSelection
 from django_features.fields import UUIDRelatedField
 
 
@@ -153,6 +154,14 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
         )
         self.fields = fields
         return fields
+
+    def should_validate_custom_field_type_selection(
+        self,
+        selection: CustomFieldTypeSelection,
+        validated_type: Any,
+    ) -> bool:
+        serializer_field = self.fields.get(selection.input_field)
+        return not isinstance(serializer_field, NestedMappingSerializer)
 
     def create(self, validated_data: dict[str, Any]) -> models.Model:
         relations_to_save: dict[str, Any] = {}
