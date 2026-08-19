@@ -642,6 +642,184 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
         self.assertEqual(first_person.first_default, first_default.default)
         self.assertEqual(second_person.second_value, "second")
 
+    def test_mapping_create_ignores_configured_fields_for_other_types(self) -> None:
+        serializer = TypeAwarePersonMappingSerializer(
+            data={
+                "external_firstname": "First",
+                "external_type": self.first_type.id,
+                "external_first": "first",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(
+            person.custom_values.filter(
+                field=self.first_field,
+                value="first",
+            ).exists()
+        )
+
+    def test_many_mapping_create_uses_each_submitted_type(self) -> None:
+        data = [
+            {
+                "external_firstname": "First",
+                "external_type": self.first_type.id,
+                "external_first": "first",
+            },
+            {
+                "external_firstname": "Second",
+                "external_type": self.second_type.id,
+                "external_second": "second",
+            },
+            {
+                "external_firstname": "Default",
+                "external_default": "default",
+            },
+        ]
+        serializer = TypeAwarePersonMappingSerializer(data=data, many=True)
+
+        self.assertEqual(
+            serializer.initial_data,
+            [
+                {
+                    "firstname": "First",
+                    "person_type": self.first_type.id,
+                    "first_value": "first",
+                },
+                {
+                    "firstname": "Second",
+                    "person_type": self.second_type.id,
+                    "second_value": "second",
+                },
+                {
+                    "firstname": "Default",
+                    "default_value": "default",
+                },
+            ],
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        first, second, default = serializer.save()
+
+        self.assertEqual(first.person_type, self.first_type)
+        self.assertEqual(second.person_type, self.second_type)
+        self.assertIsNone(default.person_type)
+        self.assertTrue(first.custom_values.filter(field=self.first_field).exists())
+        self.assertTrue(second.custom_values.filter(field=self.second_field).exists())
+        self.assertTrue(default.custom_values.filter(field=self.default_field).exists())
+
+    def test_mapping_excludes_custom_fields_without_affecting_model_fields(
+        self,
+    ) -> None:
+        serializer = TypeAwarePersonMappingSerializer(
+            data={
+                "external_firstname": "Mapped",
+                "external_type": self.first_type.id,
+                "external_default": "ignored default",
+                "external_first": "ignored typed",
+            },
+            exclude_custom_fields=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(person.firstname, "Mapped")
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertFalse(person.custom_values.exists())
+        self.assertNotIn("default_value", serializer.fields)
+        self.assertNotIn("first_value", serializer.fields)
+
+    def test_mapping_does_not_run_hooks_for_excluded_custom_fields(self) -> None:
+        calls: list[str] = []
+
+        class FormattingMappingSerializer(TypeAwarePersonMappingSerializer):
+            def format_first_value(self, value: str) -> str:
+                calls.append(value)
+                return value
+
+        serializer = FormattingMappingSerializer(
+            data={
+                "external_firstname": "Mapped",
+                "external_type": self.first_type.id,
+                "external_first": "ignored",
+            },
+            exclude_custom_fields=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(calls, [])
+
+    def test_many_mapping_excludes_custom_fields_per_item(self) -> None:
+        serializer = TypeAwarePersonMappingSerializer(
+            data=[
+                {
+                    "external_firstname": "First",
+                    "external_type": self.first_type.id,
+                    "external_first": "ignored",
+                },
+                {
+                    "external_firstname": "Second",
+                    "external_type": self.second_type.id,
+                    "external_second": "ignored",
+                },
+            ],
+            many=True,
+            exclude_custom_fields=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        first, second = serializer.save()
+
+        self.assertEqual(first.firstname, "First")
+        self.assertEqual(second.firstname, "Second")
+        self.assertFalse(first.custom_values.exists())
+        self.assertFalse(second.custom_values.exists())
+
+    def test_many_mapping_rejects_field_for_another_type_per_item(self) -> None:
+        serializer = TypeAwarePersonMappingSerializer(
+            data=[
+                {
+                    "external_firstname": "Wrong",
+                    "external_type": self.first_type.id,
+                    "external_second": "wrong",
+                },
+                {
+                    "external_firstname": "Second",
+                    "external_type": self.second_type.id,
+                    "external_second": "second",
+                },
+            ],
+            many=True,
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("second_value", serializer.errors[0])
+        self.assertEqual(serializer.errors[1], {})
+
+    def test_many_mapping_preserves_invalid_selector_error_per_item(self) -> None:
+        serializer = TypeAwarePersonMappingSerializer(
+            data=[
+                {
+                    "external_firstname": "Missing",
+                    "external_type": 999_999,
+                    "external_first": "must not be accepted",
+                },
+                {
+                    "external_firstname": "First",
+                    "external_type": self.first_type.id,
+                    "external_first": "first",
+                },
+            ],
+            many=True,
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(serializer.errors[0]["person_type"][0].code, "does_not_exist")
+        self.assertEqual(serializer.errors[1], {})
+
     def test_many_create_accepts_slug_type_selectors(self) -> None:
         serializer = SlugTypePersonSerializer(
             data=[

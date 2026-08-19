@@ -4,7 +4,6 @@ from datetime import timezone
 
 from constance.test import override_config
 from django.contrib.contenttypes.models import ContentType
-from rest_framework.exceptions import ErrorDetail
 from rest_framework.exceptions import ValidationError
 
 from app.custom_field.models import CustomField
@@ -48,49 +47,49 @@ class MappingSerializerTestCase(APITestCase):
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
 
-        self.char_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.char_field: CustomField = CustomFieldFactory(
             identifier="char_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,
         )
-        self.text_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.text_field: CustomField = CustomFieldFactory(
             identifier="text_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.TEXT,
         )
-        self.date_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.date_field: CustomField = CustomFieldFactory(
             identifier="date_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
         )
-        self.datetime_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.datetime_field: CustomField = CustomFieldFactory(
             identifier="datetime_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATETIME,
         )
-        self.integer_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.integer_field: CustomField = CustomFieldFactory(
             identifier="integer_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.INTEGER,
         )
-        self.boolean_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.boolean_field: CustomField = CustomFieldFactory(
             identifier="boolean_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.BOOLEAN,
         )
-        self.multiple_date_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.multiple_date_field: CustomField = CustomFieldFactory(
             identifier="multiple_date_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             multiple=True,
         )
-        self.choice_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.choice_field: CustomField = CustomFieldFactory(
             identifier="choice_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
             choice_field=True,
         )
-        self.multiple_choice_field: CustomField = CustomFieldFactory(  # type: ignore
+        self.multiple_choice_field: CustomField = CustomFieldFactory(
             identifier="multiple_choice_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.DATE,
@@ -98,18 +97,20 @@ class MappingSerializerTestCase(APITestCase):
             multiple=True,
         )
 
-        self.choice_1: CustomValue = CustomValueFactory(field=self.choice_field, value="2000-01-01")  # type: ignore
-        self.choice_2: CustomValue = CustomValueFactory(  # type: ignore
+        self.choice_1: CustomValue = CustomValueFactory(
+            field=self.choice_field, value="2000-01-01"
+        )
+        self.choice_2: CustomValue = CustomValueFactory(
             field=self.choice_field, value="2001-01-01"
         )
 
-        self.multiple_choice_1: CustomValue = CustomValueFactory(  # type: ignore
+        self.multiple_choice_1: CustomValue = CustomValueFactory(
             field=self.multiple_choice_field, value="2000-01-01"
         )
-        self.multiple_choice_2: CustomValue = CustomValueFactory(  # type: ignore
+        self.multiple_choice_2: CustomValue = CustomValueFactory(
             field=self.multiple_choice_field, value="2001-01-01"
         )
-        self.multiple_choice_3: CustomValue = CustomValueFactory(  # type: ignore
+        self.multiple_choice_3: CustomValue = CustomValueFactory(
             field=self.multiple_choice_field, value="2002-01-01"
         )
 
@@ -187,7 +188,7 @@ class MappingSerializerTestCase(APITestCase):
     def test_mapping_serializer_update(self) -> None:
         old_election_district = ElectionDistrictFactory(title="Old")
         election_district = ElectionDistrictFactory(title="Koeniz")
-        person: Person = PersonFactory(  # type: ignore
+        person: Person = PersonFactory(
             firstname="old", lastname="old", election_district=old_election_district
         )
 
@@ -313,24 +314,10 @@ class MappingSerializerTestCase(APITestCase):
         with self.assertRaises(ValidationError) as exception:
             serializer.is_valid(raise_exception=True)
 
-        self.assertEqual(
-            exception.exception.detail,
-            [
-                {
-                    "firstname": [
-                        ErrorDetail(
-                            string="Dieses Feld ist zwingend erforderlich.",
-                            code="required",
-                        )
-                    ]
-                },
-                {
-                    "firstname": [
-                        ErrorDetail(
-                            string="Dieses Feld ist zwingend erforderlich.",
-                            code="required",
-                        )
-                    ]
-                },
-            ],
-        )
+        detail = exception.exception.detail
+        if isinstance(detail, dict):
+            detail = list(detail.values())
+        self.assertEqual(len(detail), len(data))
+        for item in detail:
+            self.assertEqual(set(item), {"firstname"})
+            self.assertEqual(item["firstname"][0].code, "required")

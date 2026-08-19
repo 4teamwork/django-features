@@ -8,7 +8,9 @@ from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
 
+from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.serializers import CustomFieldBaseModelSerializer
+from django_features.custom_fields.serializers import CustomFieldListSerializer
 from django_features.custom_fields.serializers import CustomFieldTypeSelection
 from django_features.fields import UUIDRelatedField
 
@@ -110,6 +112,12 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
                 try:
                     field = self.model._meta.get_field(field_name)
                 except FieldDoesNotExist:
+                    if self.is_known_custom_field_identifier(field_name):
+                        # The mapping may contain custom fields for several model
+                        # types. Per-item policy below rejects submitted values for
+                        # the wrong type; fields absent from this item's type are
+                        # not invalid model configuration.
+                        continue
                     raise ValidationError(
                         f"Invalid field '{field_name}' for model {self.model}."
                     )
@@ -154,6 +162,25 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
         )
         self.fields = fields
         return fields
+
+    def should_map_internal_field(self, internal_name: str) -> bool:
+        if not getattr(self, "exclude_custom_fields", False):
+            return True
+
+        identifiers = getattr(
+            self,
+            "_excluded_mapping_custom_field_identifiers",
+            None,
+        )
+        if identifiers is None:
+            identifiers = set(
+                get_custom_field_model()
+                .objects.for_model(self.model)
+                .values_list("identifier", flat=True)
+            )
+            self._excluded_mapping_custom_field_identifiers = identifiers
+        field_name = internal_name.split(self.relation_separator, 1)[0]
+        return field_name not in identifiers
 
     def should_validate_custom_field_type_selection(
         self,
@@ -232,6 +259,9 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
     _format_prefix = "format"
     unmapped_data: Any
 
+    def should_map_internal_field(self, internal_name: str) -> bool:
+        return True
+
     def _get_nested_data(self, field_path: list[str], data: Any) -> tuple[Any, bool]:
         field_name = field_path[0]
         if not isinstance(data, dict) or field_name not in data:
@@ -263,6 +293,8 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
         try:
             data: dict[str, Any] = {}
             for external_name, internal_name in self.model_mapping.items():
+                if not self.should_map_internal_field(internal_name):
+                    continue
                 external_field_path = external_name.split(self.relation_separator)
                 value, found = self._get_nested_data(external_field_path, initial_data)
                 if not found:
@@ -287,7 +319,10 @@ class DataMappingSerializerMixin(PropertySerializerMixin):
             self.unmapped_data = previous_unmapped_data
 
 
-class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerializerMixin):
+class ListDataMappingSerializer(
+    DataMappingSerializerMixin,
+    CustomFieldListSerializer,
+):
     def __init__(self, data: Any = empty, *args: Any, **kwargs: Any) -> None:
         self.instance = None
         self.mapping = kwargs.pop("mapping", {})
@@ -304,6 +339,18 @@ class ListDataMappingSerializer(serializers.ListSerializer, DataMappingSerialize
         if not isinstance(initial_data, list):
             return initial_data
         return [self.map_data(item) for item in initial_data]
+
+    def run_child_validation(self, data: Any) -> Any:
+        index = len(self._validated_item_serializers)
+        unmapped_data = empty
+        if isinstance(self.unmapped_data, list) and index < len(self.unmapped_data):
+            unmapped_data = self.unmapped_data[index]
+        serializer = self.child.for_mapped_item(
+            data=data,
+            unmapped_data=unmapped_data,
+        )
+        self._validated_item_serializers.append(serializer)
+        return serializer.run_validation(data)
 
 
 class MappingSerializer(BaseMappingSerializer, DataMappingSerializerMixin):
@@ -322,8 +369,24 @@ class MappingSerializer(BaseMappingSerializer, DataMappingSerializerMixin):
     ) -> None:
         self.instance = instance
         self.unmapped_data = data
+        self.exclude_custom_fields = kwargs.get(
+            "exclude_custom_fields",
+            self._exclude_custom_fields,
+        )
         mapped_data = self.map_data(data)
         super().__init__(instance, data=mapped_data, **kwargs)
+
+    def for_mapped_item(
+        self,
+        *,
+        data: Any,
+        unmapped_data: Any,
+    ) -> "MappingSerializer":
+        """Build one item serializer without applying the list mapping twice."""
+        serializer = self.for_item(data=empty)
+        serializer.initial_data = data
+        serializer.unmapped_data = unmapped_data
+        return serializer
 
     @classmethod
     def many_init(cls, *args: Any, **kwargs: Any) -> ListDataMappingSerializer:
