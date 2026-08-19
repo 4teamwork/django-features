@@ -20,9 +20,9 @@ class CustomFieldBaseModelManagerTest(APITestCase):
 
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
-        self.person_type_1: PersonType = PersonTypeFactory()  # type: ignore
-        self.person_type_2: PersonType = PersonTypeFactory()  # type: ignore
-        self.person: Person = PersonFactory(person_type=self.person_type_1)  # type: ignore
+        self.person_type_1: PersonType = PersonTypeFactory()
+        self.person_type_2: PersonType = PersonTypeFactory()
+        self.person: Person = PersonFactory(person_type=self.person_type_1)
 
     def test_custom_field_base_manager_annotate_custom_field_keys(self) -> None:
         CustomFieldFactory(identifier="birthday", content_type=self.person_ct)

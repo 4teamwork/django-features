@@ -1,6 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
-from factory import lazy_attribute  # type: ignore
-from factory import SubFactory  # type: ignore
+from factory import lazy_attribute
+from factory import SubFactory
 from factory.django import DjangoModelFactory
 
 from app.custom_field import models
@@ -28,7 +28,7 @@ class CustomValueFactory(DjangoModelFactory):
     class Meta:
         model = models.CustomValue
 
-    field = SubFactory(CustomFieldFactory)  # type: ignore
+    field = SubFactory(CustomFieldFactory)
     value = "custom value"
 
 

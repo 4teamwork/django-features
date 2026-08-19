@@ -10,6 +10,12 @@ concurrency:
 jobs:
   test:
     runs-on: self-hosted
+    strategy:
+      max-parallel: 1
+      matrix:
+        django:
+          - "~=4.2.0"
+          - "~=5.2.0"
     services:
       postgres:
         image: postgres
@@ -35,12 +41,16 @@ jobs:
         with:
           poetry-version: 2.1
       - name: Install dependencies
-        run: poetry install
+        run: |
+          poetry install
+          poetry run pip install "Django${{ matrix.django }}"
       - name: isort
         run: poetry run isort --check-only --quiet --settings pyproject.toml .
       - name: flake8
         run: poetry run flake8
       - name: black
         run: poetry run black --check --config pyproject.toml .
+      - name: mypy
+        run: poetry run mypy django_features app
       - name: test
         run: DJANGO_CONFIGURATION=Testing poetry run pytest

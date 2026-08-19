@@ -145,7 +145,7 @@ class CustomFieldBaseModel(TimeStampedModel):
         _custom_values_to_add: set[AbstractBaseCustomValue] = set()
         existing_custom_values = self.custom_values.all()
         for value in self._custom_values_to_save:
-            value.save()  # type: ignore
+            value.save()
             if value not in existing_custom_values:
                 _custom_values_to_add.add(value)
         if _custom_values_to_add:
@@ -154,7 +154,7 @@ class CustomFieldBaseModel(TimeStampedModel):
         self._custom_values_to_remove = []
 
     def save(self, **kwargs: Any) -> None:
-        super().save(**kwargs)  # type: ignore
+        super().save(**kwargs)
         if self.handle_custom_values:
             self._save_custom_values()
 

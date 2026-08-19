@@ -10,6 +10,8 @@ from django_features.system_message.models import SystemMessage
 
 
 class TestMappingSerializer(MappingSerializer):
+    __test__ = False
+
     class Meta:
         model = models.Person
         fields = "__all__"

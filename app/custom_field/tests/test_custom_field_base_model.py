@@ -21,14 +21,14 @@ class CustomFieldBaseModelTest(APITestCase):
 
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
-        self.person_type: PersonType = PersonTypeFactory()  # type: ignore
-        self.person: Person = PersonFactory(person_type=self.person_type)  # type: ignore
+        self.person_type: PersonType = PersonTypeFactory()
+        self.person: Person = PersonFactory(person_type=self.person_type)
 
     def test_custom_field_base_model_custom_field_type_model(self) -> None:
         self.assertEqual(PersonType, Person.objects.get_type_model())
 
     def test_custom_field_base_model_set_char_value(self) -> None:
-        CustomFieldFactory(  # type: ignore
+        CustomFieldFactory(
             identifier="char_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,
@@ -54,7 +54,7 @@ class CustomFieldBaseModelTest(APITestCase):
         self.assertEqual("Char value", CustomValue.objects.first().value)
 
     def test_custom_field_base_model_set_text_value(self) -> None:
-        CustomFieldFactory(  # type: ignore
+        CustomFieldFactory(
             identifier="text_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.TEXT,
@@ -244,7 +244,9 @@ class CustomFieldBaseModelTest(APITestCase):
             field_type=CustomField.FIELD_TYPES.CHAR,
             choice_field=True,
         )
-        choice_1: CustomValue = CustomValueFactory(field=field, label="Choice 1", value="choice_1")  # type: ignore
+        choice_1: CustomValue = CustomValueFactory(
+            field=field, label="Choice 1", value="choice_1"
+        )
 
         # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
         # because we created a new field
@@ -277,9 +279,9 @@ class CustomFieldBaseModelTest(APITestCase):
             choice_field=True,
             multiple=True,
         )
-        choice_1: CustomValue = CustomValueFactory(field=field, value="2000-01-01")  # type: ignore
-        choice_2: CustomValue = CustomValueFactory(field=field, value="2001-01-01")  # type: ignore
-        choice_3: CustomValue = CustomValueFactory(field=field, value="2002-01-01")  # type: ignore
+        choice_1: CustomValue = CustomValueFactory(field=field, value="2000-01-01")
+        choice_2: CustomValue = CustomValueFactory(field=field, value="2001-01-01")
+        choice_3: CustomValue = CustomValueFactory(field=field, value="2002-01-01")
 
         # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
         # because we created a new field
@@ -345,7 +347,9 @@ class CustomFieldBaseModelTest(APITestCase):
         # because we created a new field
         self.person.refresh_with_custom_fields()
 
-        choice_1: CustomValue = CustomValueFactory(field=field, label="Choice 1", value="choice_1")  # type: ignore
+        choice_1: CustomValue = CustomValueFactory(
+            field=field, label="Choice 1", value="choice_1"
+        )
         self.person.choice_value = choice_1
         self.person.save()
 
@@ -370,9 +374,9 @@ class CustomFieldBaseModelTest(APITestCase):
             choice_field=True,
             multiple=True,
         )
-        choice_1: CustomValue = CustomValueFactory(field=field, value="2000-01-01")  # type: ignore
+        choice_1: CustomValue = CustomValueFactory(field=field, value="2000-01-01")
         CustomValueFactory(field=field, value="2001-01-01")
-        choice_3: CustomValue = CustomValueFactory(field=field, value="2002-01-01")  # type: ignore
+        choice_3: CustomValue = CustomValueFactory(field=field, value="2002-01-01")
 
         # we need to annotate the custom_field_keys manually or to fetch the person with the queryset again,
         # because we created a new field
@@ -422,7 +426,7 @@ class CustomFieldBaseModelTest(APITestCase):
         self.assertEqual("Char value", CustomValue.objects.first().value)
 
     def test_custom_field_base_model_get_value_with_get_custom_attr(self) -> None:
-        field: CustomField = CustomFieldFactory(  # type: ignore
+        field: CustomField = CustomFieldFactory(
             identifier="char_value",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,

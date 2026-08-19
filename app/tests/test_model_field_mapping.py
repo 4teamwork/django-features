@@ -13,12 +13,12 @@ class ModelFieldMappingTestCase(APITestCase):
     def setUp(self) -> None:
         self.person_ct = ContentType.objects.get_for_model(Person)
         self.address_ct = ContentType.objects.get_for_model(Address)
-        CustomFieldFactory(  # type: ignore
+        CustomFieldFactory(
             identifier="person_custom_field",
             content_type=self.person_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,
         )
-        CustomFieldFactory(  # type: ignore
+        CustomFieldFactory(
             identifier="address_custom_field",
             content_type=self.address_ct,
             field_type=CustomField.FIELD_TYPES.CHAR,

@@ -23,4 +23,4 @@ class SystemMessageFactory(DjangoModelFactory):
     begin = datetime.datetime(2025, 1, 1, tzinfo=UTC)
     text = "Hello World!"
     title = "System Info"
-    type = SubFactory(SystemMessageTypeFactory)  # type: ignore
+    type = SubFactory(SystemMessageTypeFactory)
