@@ -114,6 +114,10 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             get_custom_field_model().objects.for_model(self.model).filter(**self.filter)
         )
         for field in custom_fields:
+            serialized_field = field.serializer_field
+            if isinstance(self.instance, self.model):
+                # Custom-field defaults are create-only.
+                serialized_field.default = empty
             self._custom_fields.append(
                 CustomFieldData(
                     field.id,
@@ -121,10 +125,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     field.choices,
                     field.choice_field,
                     field.multiple,
-                    field.serializer_field,
+                    serialized_field,
                 )
             )
-            serialized_field = field.serializer_field
             if field.choice_field:
                 serialized_field.set_unique_field(self._unique_choice_field)
             fields[field.identifier] = serialized_field
@@ -178,7 +181,6 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self, instance: CustomFieldBaseModel, field: CustomFieldData, value: Any
     ) -> None:
         serializer_field = field.serializer_field
-        serializer_field.run_validators(value)
         if value is not None:
             value = serializer_field.to_representation(value)
         try:

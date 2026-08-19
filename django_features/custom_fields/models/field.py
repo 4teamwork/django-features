@@ -1,3 +1,7 @@
+import copy
+from dataclasses import dataclass
+from typing import Any
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
@@ -7,6 +11,17 @@ from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
 from django_features.custom_fields.models.value import CustomValueQuerySet
+
+
+@dataclass(frozen=True)
+class ValidatedCustomFieldDefault:
+    """Validate a configured default only when DRF applies it to input."""
+
+    value: Any
+    requires_context = True
+
+    def __call__(self, serializer_field: serializers.Field) -> Any:
+        return serializer_field.run_validation(copy.deepcopy(self.value))
 
 
 class CustomFieldQuerySet(models.QuerySet):
@@ -158,28 +173,30 @@ class AbstractBaseCustomField(TimeStampedModel):
     def serializer_field(self) -> serializers.Field:
         from django_features.custom_fields.fields import ChoiceIdField
 
-        params = {"allow_null": self.allow_null, "required": self.required}
+        field_params = {"allow_null": self.allow_null, "required": self.required}
+        if self.default is not None and not self.required:
+            field_params["default"] = ValidatedCustomFieldDefault(self.default)
         if self.choice_field:
-            return ChoiceIdField(field=self, **params)
+            field: serializers.Field = ChoiceIdField(field=self, **field_params)
+        else:
+            serializer_field = self.TYPE_SERIALIZER_MAP.get(self.field_type)
+            if serializer_field is None:
+                raise ValueError(f"Unknown field type: {self.field_type}")
 
-        serializer_field = self.TYPE_SERIALIZER_MAP.get(self.field_type)
-        if serializer_field is None:
-            raise ValueError(f"Unknown field type: {self.field_type}")
+            value_params = {"allow_null": self.allow_null}
+            if self.field_type in self.BLANK_TYPES:
+                value_params["allow_blank"] = self.allow_blank
 
-        if self.field_type in self.BLANK_TYPES:
-            params["allow_blank"] = self.allow_blank
+            if self.multiple:
+                field = serializers.ListField(
+                    child=serializer_field(**value_params),
+                    allow_empty=self.allow_blank,
+                    **field_params,
+                )
+            else:
+                field = serializer_field(**{**field_params, **value_params})
 
-        if self.default and not self.required:
-            params.pop("required")
-            params["default"] = self.default
-
-        if self.multiple:
-            return serializers.ListField(
-                child=serializer_field(**params),
-                **{"allow_empty": self.allow_blank, **params},
-            )
-
-        return serializer_field(**params)
+        return field
 
     @property
     def sql_field(self) -> str:
