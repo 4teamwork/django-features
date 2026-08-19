@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: lotus-arc
     services:
       postgres:
         image: postgres
