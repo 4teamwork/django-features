@@ -17,6 +17,7 @@ from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models.base import CustomFieldBaseModel
 from django_features.custom_fields.models.field import AbstractBaseCustomField
+from django_features.custom_fields.models.field import ValidatedCustomFieldDefault
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
 
 
@@ -252,6 +253,15 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 serialized_field = field.serializer_field
             except serializers.ValidationError as exc:
                 raise serializers.ValidationError({field.identifier: exc.detail})
+            if not self.is_custom_field_writable(field):
+                # Server-managed fields are never required client input. Keep
+                # their configured default for creates even when the custom-field
+                # definition itself is marked as required.
+                serialized_field.required = False
+                if field.default is not None:
+                    serialized_field.default = ValidatedCustomFieldDefault(
+                        field.default
+                    )
             if isinstance(self.instance, self.model):
                 # Custom-field defaults are create-only. Both full and partial
                 # updates preserve every omitted custom value.

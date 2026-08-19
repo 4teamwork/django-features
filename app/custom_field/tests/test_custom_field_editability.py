@@ -19,9 +19,32 @@ class CustomFieldEditabilityTest(APITestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_omitted_required_noneditable_field_is_permitted(self) -> None:
+        self.field.required = True
+        self.field.save(update_fields=["required"])
+        serializer = TypeAwarePersonSerializer(data={"firstname": "Omitted"})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+        self.assertFalse(person.custom_values.filter(field=self.field).exists())
+
     def test_create_applies_default_for_noneditable_field(self) -> None:
         self.field.default = "default value"
         self.field.save(update_fields=["default"])
+        serializer = TypeAwarePersonSerializer(data={"firstname": "Created"})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(
+            person.custom_values.get(field=self.field).value,
+            "default value",
+        )
+
+    def test_create_applies_default_for_required_noneditable_field(self) -> None:
+        self.field.default = "default value"
+        self.field.required = True
+        self.field.save(update_fields=["default", "required"])
         serializer = TypeAwarePersonSerializer(data={"firstname": "Created"})
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -52,11 +75,43 @@ class CustomFieldEditabilityTest(APITestCase):
             person.custom_values.get(field=self.field).value, "server value"
         )
 
+    def test_writability_hook_keeps_required_validation(self) -> None:
+        self.field.required = True
+        self.field.save(update_fields=["required"])
+        serializer = TrustedPersonSerializer(
+            data={"firstname": "Trusted"},
+            context={"trusted_fields": {self.field.identifier}},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(
+            serializer.errors[self.field.identifier][0].code,
+            "required",
+        )
+
     def test_full_update_preserves_omitted_noneditable_value_with_default(
         self,
     ) -> None:
         self.field.default = "default value"
         self.field.save(update_fields=["default"])
+        person = PersonFactory(firstname="Before")
+        person.custom_values.create(field=self.field, value="managed value")
+        serializer = TypeAwarePersonSerializer(
+            person,
+            data={"firstname": "After", "lastname": person.lastname},
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.assertEqual(
+            person.custom_values.get(field=self.field).value,
+            "managed value",
+        )
+
+    def test_full_update_preserves_omitted_required_noneditable_value(self) -> None:
+        self.field.required = True
+        self.field.save(update_fields=["required"])
         person = PersonFactory(firstname="Before")
         person.custom_values.create(field=self.field, value="managed value")
         serializer = TypeAwarePersonSerializer(
