@@ -34,7 +34,10 @@ class CustomFieldSerializer(serializers.ModelSerializer):
         fields = [
             "choice_field",
             "choices",
+            "allow_blank",
+            "allow_null",
             "created",
+            "default",
             "editable",
             "external_key",
             "field_type",
@@ -46,6 +49,9 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             "multiple",
             "order",
             "filterable",
+            "required",
+            "type_content_type",
+            "type_id",
         ]
 
     def get_choices(self, obj: AbstractBaseCustomField) -> list:

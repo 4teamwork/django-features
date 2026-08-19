@@ -19,9 +19,12 @@ class CustomFieldViewSetTest(APITestCase):
         data = CustomFieldSerializer(self.choice_field).data
         self.assertDictEqual(
             {
+                "allow_blank": True,
+                "allow_null": True,
                 "choice_field": False,
                 "choices": [],
                 "created": ANY,
+                "default": None,
                 "editable": True,
                 "external_key": None,
                 "field_type": "CHAR",
@@ -33,6 +36,9 @@ class CustomFieldViewSetTest(APITestCase):
                 "multiple": False,
                 "order": 0,
                 "filterable": False,
+                "required": False,
+                "type_content_type": None,
+                "type_id": None,
             },
             data,
         )
@@ -62,6 +68,8 @@ class CustomFieldViewSetTest(APITestCase):
         data = CustomFieldSerializer(self.choice_field).data
         self.assertDictEqual(
             {
+                "allow_blank": True,
+                "allow_null": True,
                 "choice_field": True,
                 "choices": [
                     {
@@ -81,6 +89,7 @@ class CustomFieldViewSetTest(APITestCase):
                     },
                 ],
                 "created": ANY,
+                "default": None,
                 "editable": True,
                 "external_key": None,
                 "field_type": CustomField.FIELD_TYPES.CHAR,
@@ -92,6 +101,9 @@ class CustomFieldViewSetTest(APITestCase):
                 "multiple": False,
                 "order": 0,
                 "filterable": False,
+                "required": False,
+                "type_content_type": None,
+                "type_id": None,
             },
             data,
         )
