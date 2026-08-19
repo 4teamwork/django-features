@@ -82,11 +82,11 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         data: Any = empty,
         **kwargs: Any,
     ) -> None:
-        self.exclude_custom_fields: bool = kwargs.get(
+        self.exclude_custom_fields: bool = kwargs.pop(
             "exclude_custom_fields", self._exclude_custom_fields
         )
         self._filter: dict[str, Any] = {}
-        self.write_only_serializer = kwargs.get(
+        self.write_only_serializer = kwargs.pop(
             "write_only_serializer", self._write_only_serializer
         )
         super().__init__(instance, data, **kwargs)
