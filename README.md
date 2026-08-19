@@ -66,6 +66,144 @@ Your querysets for the models with custom values should inherit from `django_fea
 
 Your serializers for the models with custom values should inherit from `django_features.custom_fields.serializers.CustomFieldBaseModelSerializer`.
 
+The serializer adds the applicable custom fields to the fields declared in
+`Meta.fields`. To restrict custom fields to a model type, configure the relation
+which identifies that type on the model:
+
+```python
+class Person(CustomFieldBaseModel):
+    _custom_field_type_attr = "person_type"
+
+    person_type = models.ForeignKey(
+        PersonType,
+        null=True,
+        on_delete=models.SET_NULL,
+    )
+```
+
+Custom fields without a `type_id` apply to every `Person`. A custom field with a
+`type_content_type` and `type_id` only applies when the selected `person_type`
+matches both values.
+
+The serializer reads the selected type from `_custom_field_type_attr` by default:
+
+```python
+class PersonSerializer(CustomFieldBaseModelSerializer):
+    class Meta:
+        model = Person
+        fields = ["email", "firstname", "lastname", "person_type"]
+```
+
+For input that exposes the type under another name, set
+`custom_field_type_input_field` or override `get_custom_field_type_id()`:
+
+```python
+class PersonSerializer(CustomFieldBaseModelSerializer):
+    custom_field_type_input_field = "type_id"
+
+    type_id = serializers.PrimaryKeyRelatedField(
+        allow_null=True,
+        queryset=PersonType.objects.all(),
+        required=False,
+        source="person_type",
+    )
+
+    class Meta:
+        model = Person
+        fields = ["email", "firstname", "lastname", "type_id"]
+```
+
+The configured input field must be writable and map through `source` to the
+model relation named by `_custom_field_type_attr` (or its `<relation>_id`
+attribute). Undeclared and read-only input cannot select type-specific custom
+fields.
+
+The input field's normal representation is supported, including alternative
+lookups such as `SlugRelatedField`. A field whose `source` is the model relation
+must validate to an instance of the related type model. A field whose `source`
+is the `<relation>_id` attribute must instead validate to a scalar primary key;
+the serializer verifies that the selected object exists. Incompatible field and
+source combinations raise `ImproperlyConfigured` during validation rather than
+failing when the model is saved.
+
+On updates, the submitted type takes precedence over the instance type. If the
+type is omitted, the instance type is used. With `many=True`, every input or
+instance is evaluated separately, so heterogeneous lists are supported. A custom
+`Meta.list_serializer_class` must inherit from `CustomFieldListSerializer` to
+retain this per-item behavior. `ListDataMappingSerializer` already provides this
+behavior and applies mapping hooks once for each original list item.
+
+DRF defaults configured on the type input field select the applicable custom
+fields on creates and full updates. As with other DRF fields, defaults are not
+applied during partial updates.
+
+Changing an object's type does not delete stored values belonging to its previous
+type. Those values are omitted from serialization and cannot be submitted while
+the new type is selected.
+
+The following hooks can be overridden for application-specific behavior:
+
+- `get_custom_fields_queryset()` filters or replaces the applicable custom-field
+  queryset.
+- `get_custom_field_type_id()` resolves the selected type.
+- `get_custom_fields_cache_key()` identifies definition sets that may safely be
+  shared between list items. Override it when custom field selection depends on
+  additional per-item state.
+- `should_validate_custom_field_type_selection()` can defer the final
+  selector/source consistency check for serializers which intentionally persist
+  an intermediate relation value, such as `MappingSerializer`.
+- `is_custom_field_writable(custom_field)` controls whether submitted values may
+  change a field. It returns `custom_field.editable` by default.
+- `for_item(instance=..., data=...)` constructs serializers used by `many=True`.
+  Serializers with extra constructor arguments should override it and retain the
+  shared custom-field definition cache.
+
+For example, an optional constructor value used by custom hooks can be copied to
+each per-item serializer after the base implementation has preserved the normal
+serializer options and shared cache:
+
+```python
+class TenantPersonSerializer(PersonSerializer):
+    def __init__(self, *args, tenant=None, **kwargs):
+        self.tenant = tenant
+        super().__init__(*args, **kwargs)
+
+    def for_item(self, instance=None, data=serializers.empty):
+        serializer = super().for_item(instance=instance, data=data)
+        serializer.tenant = self.tenant
+        return serializer
+```
+
+Pass `exclude_custom_fields=True` to omit dynamic custom fields. Package-specific
+serializer options such as `exclude_custom_fields` and `write_only_serializer`
+are consumed by the base serializer and are not forwarded to Django REST
+Framework. Mapping serializers also ignore mapped custom-field values when
+custom fields are excluded, while continuing to process ordinary model mappings.
+
+Submitted values for a different type and values for fields with
+`editable=False` are rejected with field-specific validation errors. Trusted
+application flows that need to write managed fields can override
+`is_custom_field_writable()`. Custom-field defaults are create-only. Full and
+partial updates preserve every omitted custom value, regardless of editability,
+and never apply or create a custom-field default. Defaults configured on ordinary
+declared DRF fields, including a type selector, retain DRF's normal behavior. The
+generated serializer fields also enforce the custom-field configuration for
+`required`, `default`, `allow_null`, `allow_blank`, choices, and multiple values.
+
+Choice input may be a scalar lookup value or an object containing the configured
+`_unique_choice_field` (which defaults to `id`). Multiple-choice input must be a
+list and cannot contain duplicate lookup values. Invalid, missing, ambiguous, and
+duplicate choices produce validation errors instead of database exceptions.
+Lookup comparison follows the Django model field and preserves JSON type identity,
+so boolean and numeric JSON values are not treated as duplicates.
+
+`CustomFieldSerializer` exposes the validation and type metadata clients need to
+build compatible forms, including `allow_blank`, `allow_null`, `default`,
+`editable`, `required`, `type_content_type`, and `type_id`.
+
+The package supports Django 4.2 and 5.2 and requires Django REST Framework 3.16
+or newer.
+
 ## System Message
 
 If you want to use `django_features.system_message`, your base configuration class should inherit from `django_features.system_message.settings.SystemMessageConfigurationMixin`.

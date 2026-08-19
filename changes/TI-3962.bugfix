@@ -1,0 +1,28 @@
+Custom field serializers now accept their package-specific constructor options,
+validate all configured defaults and choice payloads, and expose the base model's
+validation metadata. Fields are selected using the model's configured type,
+including independently for every item passed with ``many=True``.
+
+Submitted values for fields belonging to another type or fields marked as not
+editable now produce field-specific validation errors. API clients should use the
+exposed ``editable``, validation, and type metadata to decide which custom fields
+to render and submit.
+
+Type selectors must be declared writable serializer fields that persist the
+model's configured type relation. Heterogeneous serializers retain their typed
+fields when representing validated ``many=True`` input.
+
+Type selectors now use their configured DRF representation, validate compatible
+relation sources before saving, and honor selector defaults. Choice defaults are
+validated only when applied to input, avoiding per-item database lookups during
+list serialization.
+
+Mapped lists now retain per-item type selection without applying mapping hooks
+twice. Saved serializers immediately represent newly written custom values, and
+full and partial updates preserve all omitted custom values. Custom-field defaults
+are create-only. Mapping serializers which exclude custom fields ignore mapped
+custom values while continuing to process normal model fields.
+
+Multiple-choice validation now materializes its validated choices and compares
+JSON lookup values with type-sensitive identities, so values such as ``true`` and
+``1`` remain distinct.
