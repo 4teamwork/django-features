@@ -6,6 +6,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
@@ -35,6 +36,26 @@ class CustomFieldQuerySet(models.QuerySet):
         return self.select_related("content_type").filter(
             type_content_type__app_label=model._meta.app_label,
             type_content_type__model=model._meta.model_name,
+        )
+
+    def for_model_and_type(
+        self,
+        model: type[models.Model],
+        type_model: type[models.Model],
+        type_id: int | None,
+    ) -> "CustomFieldQuerySet":
+        """Return default fields and fields assigned to the selected model type."""
+        queryset = self.for_model(model)
+        if type_id is None:
+            return queryset.filter(type_id__isnull=True)
+
+        return queryset.filter(
+            Q(type_id__isnull=True)
+            | Q(
+                type_content_type__app_label=type_model._meta.app_label,
+                type_content_type__model=type_model._meta.model_name,
+                type_id=type_id,
+            )
         )
 
     def default(self) -> "CustomFieldQuerySet":
