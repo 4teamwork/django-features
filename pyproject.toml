@@ -83,6 +83,8 @@ name = "Other changes:"
 showcontent = true
 
 [tool.mypy]
+# This is intentionally a shallow project-code type gate: imported framework
+# symbols (including Django and DRF) are treated as Any until stubs are adopted.
 follow_imports = "skip"
 strict = true
 ignore_missing_imports = true

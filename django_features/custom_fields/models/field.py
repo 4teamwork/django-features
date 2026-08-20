@@ -1,6 +1,7 @@
 import copy
 from dataclasses import dataclass
 from typing import Any
+from typing import ClassVar
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -19,7 +20,7 @@ class ValidatedCustomFieldDefault:
     """Validate a configured default only when DRF applies it to input."""
 
     value: Any
-    requires_context = True
+    requires_context: ClassVar[bool] = True
 
     def __call__(self, serializer_field: serializers.Field) -> Any:
         return serializer_field.run_validation(copy.deepcopy(self.value))
