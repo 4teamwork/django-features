@@ -1,4 +1,5 @@
 import json
+import reprlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -26,6 +27,74 @@ from django_features.custom_fields.serializers import CustomChoiceSerializer
 class ChoiceLookupMetadata:
     field_name: str
     model_field: models.Field
+
+
+@dataclass(frozen=True)
+class _SafeChoiceValue:
+    """Render malformed recursive or deeply nested values without raising."""
+
+    value: Any
+
+    def __repr__(self) -> str:
+        try:
+            return reprlib.repr(self.value)
+        except Exception:  # pragma: no cover - defensive against hostile repr hooks
+            return f"<{type(self.value).__name__}>"
+
+
+def _normalize_postgresql_json_value(value: Any) -> Any:
+    """Return the value as PostgreSQL can represent it in ``jsonb``.
+
+    PostgreSQL rejects U+0000 and unpaired UTF-16 surrogate code points while
+    parsing JSON and canonicalizes negative numeric zero to positive zero. Apply
+    those rules before constructing a lookup so malformed input becomes a field
+    error and valid stored values retain a reachable identity.
+    """
+
+    if isinstance(value, str):
+        if "\x00" in value or any(
+            0xD800 <= ord(character) <= 0xDFFF for character in value
+        ):
+            raise ValueError("PostgreSQL jsonb does not support this string.")
+        return value
+    if isinstance(value, float) and value == 0:
+        return 0.0
+    if isinstance(value, list):
+        return [_normalize_postgresql_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            _normalize_postgresql_json_value(key): _normalize_postgresql_json_value(
+                item
+            )
+            for key, item in value.items()
+        }
+    return value
+
+
+def _canonical_json_choice(
+    model_field: models.JSONField,
+    value: Any,
+) -> tuple[Any, str]:
+    """Return a PostgreSQL-compatible value and its canonical JSON identity.
+
+    Encoding and decoding first applies the configured Django encoder and mirrors
+    JSON object-key coercion, including PostgreSQL's last-key-wins behavior.  The
+    second encoding is stable for identity and duplicate comparisons.
+    """
+
+    encoded = json.dumps(
+        value,
+        cls=model_field.encoder or DjangoJSONEncoder,
+        allow_nan=False,
+    )
+    normalized = _normalize_postgresql_json_value(json.loads(encoded))
+    identity = json.dumps(
+        normalized,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return normalized, identity
 
 
 class ChoiceIdField(serializers.Field):
@@ -167,7 +236,7 @@ class ChoiceIdField(serializers.Field):
         lookup = lookup or self._request_lookup
         raise ValidationError(
             _("Malformed custom choice %(value)r for '%(field)s'.")
-            % {"field": lookup.field_name, "value": data},
+            % {"field": lookup.field_name, "value": _SafeChoiceValue(data)},
             code="invalid",
         )
 
@@ -201,12 +270,14 @@ class ChoiceIdField(serializers.Field):
             value = lookup.model_field.to_python(data)
             lookup.model_field.get_prep_value(value)
             if isinstance(lookup.model_field, models.JSONField):
-                json.dumps(
-                    value,
-                    cls=lookup.model_field.encoder or DjangoJSONEncoder,
-                    allow_nan=False,
-                )
-        except (DjangoValidationError, OverflowError, TypeError, ValueError):
+                value, _identity = _canonical_json_choice(lookup.model_field, value)
+        except (
+            DjangoValidationError,
+            OverflowError,
+            RecursionError,
+            TypeError,
+            ValueError,
+        ):
             self._malformed(data, lookup=lookup)
         return value
 
@@ -214,16 +285,10 @@ class ChoiceIdField(serializers.Field):
     def _choice_identity(model_field: models.Field, value: Any) -> tuple[Any, ...]:
         """Return a hashable, type-sensitive identity for a lookup value."""
         if isinstance(model_field, models.JSONField):
-            encoder = model_field.encoder or DjangoJSONEncoder
+            _normalized, identity = _canonical_json_choice(model_field, value)
             return (
                 "json",
-                json.dumps(
-                    value,
-                    cls=encoder,
-                    allow_nan=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ),
+                identity,
             )
 
         prepared = model_field.get_prep_value(value)

@@ -1,6 +1,7 @@
 from datetime import date
 from datetime import datetime
 from datetime import timezone
+from unittest.mock import patch
 
 from django.contrib.contenttypes.models import ContentType
 
@@ -440,3 +441,164 @@ class CustomFieldBaseModelTest(APITestCase):
 
         self.assertFalse(hasattr(self.person, "char_value"))
         self.assertEqual("Char value", self.person.get_custom_attr("char_value"))
+
+    def test_type_change_invalidates_annotated_keys_without_a_query(self) -> None:
+        second_type = PersonTypeFactory(title="Second type")
+        CustomFieldFactory(
+            identifier="first_value",
+            content_type=self.person_ct,
+            type_object=self.person_type,
+        )
+        CustomFieldFactory(
+            identifier="second_value",
+            content_type=self.person_ct,
+            type_object=second_type,
+        )
+
+        relation_instance = Person.objects.get(pk=self.person.pk)
+        self.assertEqual(["first_value"], relation_instance.custom_field_keys)
+        with self.assertNumQueries(0):
+            relation_instance.person_type = second_type
+        self.assertNotIn("custom_field_keys", relation_instance.__dict__)
+
+        attname_instance = Person.objects.get(pk=self.person.pk)
+        self.assertEqual(["first_value"], attname_instance.custom_field_keys)
+        with self.assertNumQueries(0):
+            attname_instance.person_type_id = second_type.pk
+        self.assertNotIn("custom_field_keys", attname_instance.__dict__)
+
+    def test_unchanged_type_preserves_annotated_keys_without_a_query(self) -> None:
+        CustomFieldFactory(
+            identifier="type_value",
+            content_type=self.person_ct,
+            type_object=self.person_type,
+        )
+
+        relation_instance = Person.objects.get(pk=self.person.pk)
+        relation_keys = relation_instance.custom_field_keys
+        with self.assertNumQueries(0):
+            relation_instance.person_type = self.person_type
+        self.assertIs(relation_keys, relation_instance.custom_field_keys)
+
+        attname_instance = Person.objects.get(pk=self.person.pk)
+        attname_keys = attname_instance.custom_field_keys
+        with self.assertNumQueries(0):
+            attname_instance.person_type_id = self.person_type.pk
+        self.assertIs(attname_keys, attname_instance.custom_field_keys)
+
+    def test_type_null_transitions_invalidate_annotated_keys(self) -> None:
+        CustomFieldFactory(
+            identifier="typed_value",
+            content_type=self.person_ct,
+            type_object=self.person_type,
+        )
+
+        typed_person = Person.objects.get(pk=self.person.pk)
+        with self.assertNumQueries(0):
+            typed_person.person_type = None
+        self.assertNotIn("custom_field_keys", typed_person.__dict__)
+
+        untyped_person = PersonFactory(person_type=None)
+        untyped_person = Person.objects.get(pk=untyped_person.pk)
+        self.assertEqual([], untyped_person.custom_field_keys)
+        with self.assertNumQueries(0):
+            untyped_person.person_type_id = self.person_type.pk
+        self.assertNotIn("custom_field_keys", untyped_person.__dict__)
+
+    def test_deferred_type_assignment_invalidates_without_loading_type(self) -> None:
+        CustomFieldFactory(
+            identifier="typed_value",
+            content_type=self.person_ct,
+            type_object=self.person_type,
+        )
+        second_type = PersonTypeFactory(title="Second type")
+        person = Person.objects.only("id").get(pk=self.person.pk)
+
+        self.assertIn("custom_field_keys", person.__dict__)
+        self.assertNotIn("person_type_id", person.__dict__)
+        with self.assertNumQueries(0):
+            person.person_type_id = second_type.pk
+        self.assertNotIn("custom_field_keys", person.__dict__)
+
+    def test_post_type_change_custom_write_refreshes_applicable_keys_once(
+        self,
+    ) -> None:
+        first_field = CustomFieldFactory(
+            identifier="first_value",
+            content_type=self.person_ct,
+            type_object=self.person_type,
+        )
+        second_type = PersonTypeFactory(title="Second type")
+        second_field = CustomFieldFactory(
+            identifier="second_value",
+            content_type=self.person_ct,
+            type_object=second_type,
+        )
+        global_field = CustomFieldFactory(
+            identifier="global_value",
+            content_type=self.person_ct,
+        )
+        person = Person.objects.get(pk=self.person.pk)
+        person.set_custom_attr(first_field.identifier, "kept")
+        person.save()
+
+        person.person_type = second_type
+        person.save(update_fields=["person_type"])
+        self.assertNotIn("custom_field_keys", person.__dict__)
+
+        with patch.object(
+            person,
+            "refresh_with_custom_fields",
+            wraps=person.refresh_with_custom_fields,
+        ) as refresh:
+            person.set_custom_attr(second_field.identifier, "new")
+
+        refresh.assert_called_once_with()
+        self.assertEqual(
+            [second_field.identifier, global_field.identifier],
+            person.custom_field_keys,
+        )
+        self.assertEqual(1, len(person._custom_values_to_save))
+        person.save()
+
+        self.assertTrue(
+            person.custom_values.filter(field=first_field, value="kept").exists()
+        )
+        self.assertTrue(
+            person.custom_values.filter(field=second_field, value="new").exists()
+        )
+
+    def test_old_type_write_is_not_queued_after_type_change(self) -> None:
+        first_field = CustomFieldFactory(
+            identifier="first_value",
+            content_type=self.person_ct,
+            type_object=self.person_type,
+        )
+        second_type = PersonTypeFactory(title="Second type")
+        CustomFieldFactory(
+            identifier="second_value",
+            content_type=self.person_ct,
+            type_object=second_type,
+        )
+        person = Person.objects.get(pk=self.person.pk)
+        person.set_custom_attr(first_field.identifier, "original")
+        person.save()
+        person.person_type = second_type
+        person.save(update_fields=["person_type"])
+
+        person.set_custom_attr(first_field.identifier, "ignored")
+
+        self.assertEqual([], person._custom_values_to_save)
+        person.save()
+        self.assertTrue(
+            person.custom_values.filter(
+                field=first_field,
+                value="original",
+            ).exists()
+        )
+        self.assertFalse(
+            person.custom_values.filter(
+                field=first_field,
+                value="ignored",
+            ).exists()
+        )

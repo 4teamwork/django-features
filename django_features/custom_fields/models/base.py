@@ -1,6 +1,8 @@
 from typing import Any
+from typing import ClassVar
 
 from django.contrib.postgres.expressions import ArraySubquery
+from django.core.exceptions import FieldDoesNotExist
 from django.db import IntegrityError
 from django.db import models
 from django.db import ProgrammingError
@@ -19,6 +21,9 @@ from django_features.custom_fields.helpers import validate_custom_field_identifi
 from django_features.custom_fields.models.field import AbstractBaseCustomField
 from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
+
+
+_CUSTOM_FIELD_TYPE_ID_NOT_SET = object()
 
 
 class CustomFieldModelBaseManager(models.Manager):
@@ -128,6 +133,7 @@ class CustomFieldTypeBaseModel(TimeStampedModel):
 
 class CustomFieldBaseModel(TimeStampedModel):
     _custom_field_type_attr: str | None = None
+    _custom_field_reserved_identifiers: ClassVar[frozenset[str]] = frozenset()
     objects = CustomFieldModelBaseManager()
 
     class Meta:
@@ -204,7 +210,39 @@ class CustomFieldBaseModel(TimeStampedModel):
             self.refresh_with_custom_fields()
         return getattr(self, name)
 
+    def _custom_field_type_assignment_state(
+        self,
+        name: str,
+    ) -> tuple[str, Any] | None:
+        """Return the raw type-id state for a relation or attname assignment.
+
+        Reading the related object here could issue a query for deferred fields.
+        Django's relation descriptor ultimately assigns the foreign key attname,
+        so comparing the value in ``__dict__`` covers assignments through either
+        the relation or its raw id without database access.
+        """
+        type_attr = type(self)._custom_field_type_attr
+        if type_attr is None or name not in (type_attr, f"{type_attr}_id"):
+            return None
+
+        try:
+            type_field = self._meta.get_field(type_attr)
+        except FieldDoesNotExist:
+            # Serializer structure validation provides the actionable error for
+            # an invalid configuration. Model assignment should retain Django's
+            # normal behavior until that validation runs.
+            return None
+
+        type_attname = type_field.attname
+        if name not in (type_attr, type_attname):
+            return None
+        return (
+            type_attname,
+            self.__dict__.get(type_attname, _CUSTOM_FIELD_TYPE_ID_NOT_SET),
+        )
+
     def __setattr__(self, name: str, value: Any) -> None:
+        type_assignment = self._custom_field_type_assignment_state(name)
         if hasattr(self, "custom_field_keys") and name in self.custom_field_keys:
             field = get_custom_field_model().objects.get(identifier=name)
             if field.choice_field:
@@ -212,6 +250,20 @@ class CustomFieldBaseModel(TimeStampedModel):
             else:
                 self._create_or_update_custom_value(field, value)
         super().__setattr__(name, value)
+        if type_assignment is None or "custom_field_keys" not in self.__dict__:
+            return
+
+        type_attname, previous_type_id = type_assignment
+        current_type_id = self.__dict__.get(
+            type_attname,
+            _CUSTOM_FIELD_TYPE_ID_NOT_SET,
+        )
+        if (
+            previous_type_id is _CUSTOM_FIELD_TYPE_ID_NOT_SET
+            or current_type_id is _CUSTOM_FIELD_TYPE_ID_NOT_SET
+            or previous_type_id != current_type_id
+        ):
+            self.__dict__.pop("custom_field_keys", None)
 
     def delete(
         self,

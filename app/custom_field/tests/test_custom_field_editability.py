@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from app.custom_field.models import CustomField
 from app.custom_field.tests.factories import CustomFieldFactory
+from app.custom_field.tests.factories import CustomValueFactory
 from app.custom_field.tests.serializers import TrustedPersonSerializer
 from app.custom_field.tests.serializers import TypeAwarePersonSerializer
 from app.tests import APITestCase
@@ -63,6 +64,85 @@ class CustomFieldEditabilityTest(APITestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn(self.field.identifier, serializer.errors)
 
+    def test_update_rejects_same_and_changed_noneditable_values(self) -> None:
+        person = PersonFactory(firstname="Before")
+        person.custom_values.create(field=self.field, value="managed value")
+
+        for submitted in ("managed value", "changed value"):
+            with self.subTest(submitted=submitted):
+                serializer = TypeAwarePersonSerializer(
+                    person,
+                    data={
+                        "firstname": "After",
+                        self.field.identifier: submitted,
+                    },
+                    partial=True,
+                )
+
+                self.assertFalse(serializer.is_valid())
+                self.assertEqual(
+                    serializer.errors[self.field.identifier][0].code,
+                    "invalid",
+                )
+                self.assertTrue(str(serializer.errors[self.field.identifier][0]))
+
+                person.refresh_from_db()
+                self.assertEqual(person.firstname, "Before")
+                self.assertEqual(
+                    person.custom_values.get(field=self.field).value,
+                    "managed value",
+                )
+
+    def test_partial_update_preserves_omitted_noneditable_value(self) -> None:
+        person = PersonFactory(firstname="Before")
+        person.custom_values.create(field=self.field, value="managed value")
+        serializer = TypeAwarePersonSerializer(
+            person,
+            data={"firstname": "After"},
+            partial=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.assertEqual(
+            person.custom_values.get(field=self.field).value,
+            "managed value",
+        )
+
+    def test_partial_update_preserves_omitted_protected_choices(self) -> None:
+        single_field = CustomFieldFactory(
+            identifier="protected_single_choice",
+            choice_field=True,
+            editable=False,
+        )
+        single_choice = CustomValueFactory(field=single_field)
+        multiple_field = CustomFieldFactory(
+            identifier="protected_multiple_choices",
+            choice_field=True,
+            editable=False,
+            multiple=True,
+        )
+        multiple_choices = [
+            CustomValueFactory(field=multiple_field),
+            CustomValueFactory(field=multiple_field),
+        ]
+        person = PersonFactory(firstname="Before")
+        person.custom_values.add(single_choice, *multiple_choices)
+        serializer = TypeAwarePersonSerializer(
+            person,
+            data={"firstname": "After"},
+            partial=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.assertSetEqual(
+            set(person.custom_values.values_list("pk", flat=True)),
+            {single_choice.pk, *(choice.pk for choice in multiple_choices)},
+        )
+
     def test_writability_hook_can_allow_trusted_values(self) -> None:
         serializer = TrustedPersonSerializer(
             data={"firstname": "Trusted", self.field.identifier: "server value"},
@@ -74,6 +154,21 @@ class CustomFieldEditabilityTest(APITestCase):
         self.assertEqual(
             person.custom_values.get(field=self.field).value, "server value"
         )
+
+    def test_writability_hook_can_update_trusted_values(self) -> None:
+        person = PersonFactory()
+        person.custom_values.create(field=self.field, value="before")
+        serializer = TrustedPersonSerializer(
+            person,
+            data={self.field.identifier: "after"},
+            partial=True,
+            context={"trusted_fields": {self.field.identifier}},
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.assertEqual(person.custom_values.get(field=self.field).value, "after")
 
     def test_writability_hook_keeps_required_validation(self) -> None:
         self.field.required = True

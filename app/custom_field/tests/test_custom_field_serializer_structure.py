@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
+from rest_framework.fields import empty
 
 from app.custom_field.tests.factories import CustomFieldFactory
 from app.custom_field.tests.serializers import TypeAwarePersonSerializer
@@ -181,6 +182,189 @@ class CustomFieldSerializerStructureTest(APITestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(CountingPrimaryKeyRelatedField.conversion_calls, 1)
 
+    def test_type_override_can_inspect_fields_during_outer_field_build(self) -> None:
+        calls: list[set[str]] = []
+
+        class InspectingTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int | None:
+                calls.append(set(self.fields))
+                return super().get_custom_field_type_id()
+
+        serializer = InspectingTypePersonSerializer(
+            data={
+                "firstname": "Inspect fields",
+                "person_type": self.first_type.pk,
+                "first_value": "first",
+            }
+        )
+
+        self.assertIn("first_value", serializer.fields)
+        self.assertNotIn("second_value", serializer.fields)
+        self.assertEqual(
+            calls,
+            [{"email", "firstname", "lastname", "person_type"}],
+        )
+        self.assertIs(serializer.fields["firstname"].parent, serializer)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_type_override_field_inspection_does_not_cache_default_type(self) -> None:
+        calls: list[set[str]] = []
+
+        class ContextTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int:
+                calls.append(set(self.fields))
+                return self.context["selected_type"].pk
+
+        serializer = ContextTypePersonSerializer(
+            data={
+                "firstname": "Override fields",
+                "person_type": self.first_type.pk,
+            },
+            context={"selected_type": self.second_type},
+        )
+
+        self.assertEqual(serializer.get_custom_field_type_id(), self.second_type.pk)
+        self.assertNotIn("fields", serializer.__dict__)
+        self.assertIn("second_value", serializer.fields)
+        self.assertNotIn("first_value", serializer.fields)
+        self.assertEqual(
+            calls,
+            [{"email", "firstname", "lastname", "person_type"}],
+        )
+
+    def test_nested_single_input_rebuilds_preinspected_fields_for_its_type(
+        self,
+    ) -> None:
+        class PersonContainerSerializer(serializers.Serializer):
+            person = TypeAwarePersonSerializer()
+
+            def create(self, validated_data: dict[str, Any]) -> dict[str, Person]:
+                child = self.fields["person"]
+                return {"person": child.create(validated_data["person"])}
+
+        serializer = PersonContainerSerializer(
+            data={
+                "person": {
+                    "firstname": "Nested",
+                    "person_type": self.first_type.pk,
+                    "first_value": "nested value",
+                }
+            }
+        )
+        child = serializer.fields["person"]
+        self.assertNotIn("first_value", child.fields)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIn("first_value", child.fields)
+        self.assertNotIn("second_value", child.fields)
+        person = serializer.save()["person"]
+
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(
+            person.custom_values.filter(
+                field=self.first_field,
+                value="nested value",
+            ).exists()
+        )
+        self.assertEqual(serializer.data["person"]["first_value"], "nested value")
+
+    def test_nested_field_inspection_defers_override_until_input_is_known(self) -> None:
+        calls: list[set[str]] = []
+
+        class InspectingTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int | None:
+                calls.append(set(self.fields))
+                return super().get_custom_field_type_id()
+
+        class PersonContainerSerializer(serializers.Serializer):
+            person = InspectingTypePersonSerializer()
+
+        serializer = PersonContainerSerializer(
+            data={
+                "person": {
+                    "firstname": "Nested override",
+                    "person_type": self.first_type.pk,
+                    "first_value": "nested value",
+                }
+            }
+        )
+        child = serializer.fields["person"]
+        self.assertNotIn("first_value", child.fields)
+        self.assertEqual(calls, [])
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIn("first_value", child.fields)
+        self.assertEqual(
+            calls,
+            [{"email", "firstname", "lastname", "person_type"}],
+        )
+
+    def test_direct_validation_recomputes_an_override_for_each_input(self) -> None:
+        calls: list[int | None] = []
+
+        class InspectingTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int | None:
+                selected = super().get_custom_field_type_id()
+                calls.append(selected)
+                return selected
+
+        serializer = InspectingTypePersonSerializer()
+
+        first = serializer.run_validation(
+            {
+                "firstname": "First direct input",
+                "person_type": self.first_type.pk,
+                "first_value": "first",
+            }
+        )
+        second = serializer.run_validation(
+            {
+                "firstname": "Second direct input",
+                "person_type": self.second_type.pk,
+                "second_value": "second",
+            }
+        )
+
+        self.assertEqual(first["first_value"], "first")
+        self.assertEqual(second["second_value"], "second")
+        self.assertEqual(calls, [self.first_type.pk, self.second_type.pk])
+
+    def test_nested_single_model_representation_uses_the_item_type(self) -> None:
+        person = PersonFactory(person_type=self.first_type)
+        person.custom_values.create(field=self.first_field, value="stored")
+        person = Person.objects.get(pk=person.pk)
+
+        class PersonContainerSerializer(serializers.Serializer):
+            person = TypeAwarePersonSerializer()
+
+        data = PersonContainerSerializer({"person": person}).data
+
+        self.assertEqual(data["person"]["first_value"], "stored")
+        self.assertNotIn("second_value", data["person"])
+
+    def test_nested_item_scope_runs_representation_override_once(self) -> None:
+        calls: list[Person] = []
+
+        class FormattingPersonSerializer(TypeAwarePersonSerializer):
+            def to_representation(self, instance: Person) -> dict[str, Any]:
+                calls.append(instance)
+                data = super().to_representation(instance)
+                data["formatted"] = True
+                return data
+
+        class PersonContainerSerializer(serializers.Serializer):
+            person = FormattingPersonSerializer()
+
+        person = PersonFactory(person_type=self.first_type)
+        person.custom_values.create(field=self.first_field, value="stored")
+        person = Person.objects.get(pk=person.pk)
+
+        data = PersonContainerSerializer({"person": person}).data
+
+        self.assertEqual(calls, [person])
+        self.assertTrue(data["person"]["formatted"])
+        self.assertEqual(data["person"]["first_value"], "stored")
+
     def test_many_items_resolve_fields_and_representation_independently(self) -> None:
         serializer = TypeAwarePersonSerializer(data=self.type_aware_data(), many=True)
 
@@ -209,6 +393,159 @@ class CustomFieldSerializerStructureTest(APITestCase):
         self.assertNotIn("second_value", serializer.data[0])
         self.assertEqual(serializer.data[1]["second_value"], "second")
         self.assertNotIn("first_value", serializer.data[1])
+
+    def test_nullable_many_input_short_circuits_without_pairing(self) -> None:
+        serializer = TypeAwarePersonSerializer(
+            data=None,
+            many=True,
+            allow_null=True,
+        )
+        # Resolve the child fields first to cover the cached type-selection path.
+        self.assertIn("firstname", serializer.child.fields)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIsNone(serializer.validated_data)
+        self.assertEqual(serializer._paired_item_serializers, [])
+
+    def test_nested_nullable_many_input_preserves_drf_null_semantics(self) -> None:
+        class PeopleSerializer(serializers.Serializer):
+            people = TypeAwarePersonSerializer(many=True, allow_null=True)
+
+        serializer = PeopleSerializer(data={"people": None})
+        self.assertIn("firstname", serializer.fields["people"].child.fields)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIsNone(serializer.validated_data["people"])
+
+    def test_many_callable_default_bypasses_item_and_list_validation(self) -> None:
+        default_value = [
+            {
+                "firstname": "Already internal",
+                "person_type": self.first_type,
+                "first_value": "default",
+            },
+            {
+                "firstname": "Second internal",
+                "person_type": self.first_type,
+                "first_value": "second default",
+            },
+            {
+                "firstname": "Other type internal",
+                "person_type": self.second_type,
+                "second_value": "other default",
+            },
+        ]
+        default_calls: list[str] = []
+        validator_calls: list[Any] = []
+
+        def get_default(serializer_field: serializers.Field) -> list[dict[str, Any]]:
+            default_calls.append(serializer_field.field_name)
+            return default_value
+
+        setattr(get_default, "requires_context", True)
+
+        def validate_list(value: Any) -> None:
+            validator_calls.append(value)
+
+        class PeopleSerializer(serializers.Serializer):
+            people = TypeAwarePersonSerializer(
+                many=True,
+                default=get_default,
+                validators=[validate_list],
+            )
+
+        serializer = PeopleSerializer(data={})
+        list_serializer = serializer.fields["people"]
+        self.assertIn("firstname", list_serializer.child.fields)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIs(serializer.validated_data["people"], default_value)
+        self.assertEqual(default_calls, ["people"])
+        self.assertEqual(validator_calls, [])
+        self.assertEqual(list_serializer._paired_item_serializers, [])
+        # One definition query per distinct type; the repeated first type reuses
+        # the list serializer's shared cache.
+        with self.assertNumQueries(2):
+            representation = serializer.data["people"]
+        self.assertEqual(
+            [item["first_value"] for item in representation[:2]],
+            ["default", "second default"],
+        )
+        self.assertEqual(representation[2]["second_value"], "other default")
+        self.assertFalse(any("second_value" in item for item in representation[:2]))
+        self.assertNotIn("first_value", representation[2])
+
+    def test_many_empty_default_is_not_treated_as_validated_input(self) -> None:
+        class PeopleSerializer(serializers.Serializer):
+            people = TypeAwarePersonSerializer(many=True, default=[])
+
+        serializer = PeopleSerializer(data={})
+        list_serializer = serializer.fields["people"]
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["people"], [])
+        self.assertEqual(list_serializer._paired_item_serializers, [])
+        self.assertEqual(list_serializer._paired_item_values, ())
+
+    def test_many_validation_resets_pairing_after_a_default_short_circuit(
+        self,
+    ) -> None:
+        default_value = [{"firstname": "Default"}]
+        serializer = TypeAwarePersonSerializer(
+            many=True,
+            required=False,
+            default=lambda: default_value,
+        )
+
+        validated = serializer.run_validation(self.type_aware_data())
+        self.assertEqual(len(serializer._paired_item_serializers), 2)
+        self.assertIs(serializer._validated_list_data, validated)
+
+        short_circuited = serializer.run_validation(empty)
+
+        self.assertIs(short_circuited, default_value)
+        self.assertEqual(serializer._validated_item_serializers, [])
+        self.assertEqual(serializer._paired_item_serializers, [])
+        self.assertIsNot(serializer._validated_list_data, short_circuited)
+
+    def test_single_nullable_input_short_circuits_type_validation(self) -> None:
+        serializer = TypeAwarePersonSerializer(data=None, allow_null=True)
+        self.assertIn("firstname", serializer.fields)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIsNone(serializer.validated_data)
+
+    def test_single_default_bypasses_type_selection_validation(self) -> None:
+        default_value = {
+            "firstname": "Already internal",
+            "person_type": self.first_type,
+            "first_value": "default",
+        }
+
+        class PersonContainerSerializer(serializers.Serializer):
+            person = TypeAwarePersonSerializer(default=default_value)
+
+        serializer = PersonContainerSerializer(data={})
+        child = serializer.fields["person"]
+        self.assertIn("firstname", child.fields)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["person"], default_value)
+        self.assertEqual(serializer.data["person"]["first_value"], "default")
+        self.assertNotIn("second_value", serializer.data["person"])
+
+    def test_converted_non_mapping_value_has_a_configuration_error(self) -> None:
+        class NonMappingPersonSerializer(TypeAwarePersonSerializer):
+            def to_internal_value(self, data: Any) -> list[Any]:
+                return []
+
+        serializer = NonMappingPersonSerializer(data={"firstname": "Invalid"})
+
+        with self.assertRaisesRegex(
+            ImproperlyConfigured,
+            "must return a mapping from to_internal_value",
+        ):
+            serializer.is_valid()
 
     def test_validated_data_representation_uses_paired_item_serializers(self) -> None:
         serializer = TypeAwarePersonSerializer(data=self.type_aware_data(), many=True)

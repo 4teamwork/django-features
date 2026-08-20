@@ -13,7 +13,7 @@ class CustomFieldViewSet(ReadOnlyModelViewSet):
     valid_content_type_filter_fields = ["app_label", "model"]
 
     def get_queryset(self) -> QuerySet[AbstractBaseCustomField]:
-        qs = super().get_queryset()
+        qs = super().get_queryset().select_related("type_content_type")
         for field in self.valid_content_type_filter_fields:
             value = self.request.GET.get(field)
             if value:

@@ -1,4 +1,5 @@
 from typing import Any
+from unittest.mock import patch
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
@@ -11,6 +12,8 @@ from app.models import Person
 from app.models import PersonType
 from app.tests import APITestCase
 from app.tests.factories import PersonTypeFactory
+from django_features.custom_fields.helpers import get_reserved_custom_field_identifiers
+from django_features.custom_fields.models.base import CustomFieldBaseModel
 from django_features.serializers import MappingSerializer
 
 
@@ -161,3 +164,71 @@ class CustomFieldIdentifierCollisionTest(APITestCase):
             serializer.is_valid()
 
         self.assertEqual(Person._base_manager.count(), 0)
+
+    def test_registered_runtime_identifier_is_rejected_by_serializer(self) -> None:
+        with patch.object(
+            Person,
+            "_custom_field_reserved_identifiers",
+            frozenset({"runtime_only_value"}),
+        ):
+            self.assert_identifier_rejected("runtime_only_value")
+
+    def test_registered_runtime_identifier_is_rejected_by_manager(self) -> None:
+        CustomFieldFactory(
+            content_type=self.person_content_type,
+            identifier="runtime_only_value",
+        )
+
+        with patch.object(
+            Person,
+            "_custom_field_reserved_identifiers",
+            frozenset({"runtime_only_value"}),
+        ):
+            with self.assertRaisesMessage(
+                ImproperlyConfigured,
+                "'runtime_only_value'",
+            ):
+                Person.objects.all()
+
+    def test_runtime_identifier_declarations_are_unioned_across_mro(self) -> None:
+        class ReservedBase:
+            _custom_field_reserved_identifiers = frozenset({"base_runtime"})
+
+        class ReservedMiddle(ReservedBase):
+            _custom_field_reserved_identifiers = frozenset({"middle_runtime"})
+
+        class ReservedModel(ReservedMiddle):
+            _custom_field_reserved_identifiers = frozenset({"model_runtime"})
+            _meta = Person._meta
+
+            def __new__(cls) -> "ReservedModel":
+                raise AssertionError(
+                    "Identifier validation must not instantiate models"
+                )
+
+        with self.assertNumQueries(0):
+            reserved = get_reserved_custom_field_identifiers(ReservedModel)
+
+        self.assertTrue(
+            {"base_runtime", "middle_runtime", "model_runtime"}.issubset(reserved)
+        )
+
+    def test_runtime_identifier_registry_is_immutable_and_not_shared(self) -> None:
+        declaration = CustomFieldBaseModel._custom_field_reserved_identifiers
+
+        self.assertIsInstance(declaration, frozenset)
+        with self.assertRaises(AttributeError):
+            declaration.add("mutated")  # type: ignore[attr-defined]
+
+        with patch.object(
+            Person,
+            "_custom_field_reserved_identifiers",
+            frozenset({"runtime_only_value"}),
+        ):
+            reserved = get_reserved_custom_field_identifiers(Person)
+            reserved.add("caller_only")
+
+            self.assertNotIn(
+                "caller_only",
+                Person._custom_field_reserved_identifiers,
+            )

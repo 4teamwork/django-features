@@ -40,6 +40,10 @@ def get_reserved_custom_field_identifiers(
 ) -> set[str]:
     """Return model and framework-instance names unavailable to custom fields."""
     reserved = set(CUSTOM_FIELD_INSTANCE_RESERVED_IDENTIFIERS)
+    for model_class in model.__mro__:
+        reserved.update(
+            model_class.__dict__.get("_custom_field_reserved_identifiers", ())
+        )
     reserved.update(dir(model))
     for model_field in model._meta.get_fields():
         reserved.add(model_field.name)

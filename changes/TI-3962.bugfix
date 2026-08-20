@@ -6,7 +6,9 @@ including independently for every item passed with ``many=True``.
 Submitted values for fields belonging to another type or fields marked as not
 editable now produce field-specific validation errors. API clients should use the
 exposed ``editable``, validation, and type metadata to decide which custom fields
-to render and submit.
+to render and submit. Type metadata includes the stable content-type app label and
+model name so clients do not have to compare installation-specific content-type
+primary keys.
 
 Type selectors must be declared writable serializer fields that persist the
 model's configured type relation. Heterogeneous serializers retain their typed
@@ -25,19 +27,31 @@ custom values while continuing to process normal model fields.
 
 Choice validation now materializes its validated choices and compares JSON lookup
 values with type-sensitive identities, so values such as ``true`` and ``1`` or
-``1`` and ``1.0`` remain distinct for both single and multiple choices.
+``1`` and ``1.0`` remain distinct for both single and multiple choices. Validated
+multiple choices are returned as an eager list in request order instead of a
+``CustomValueQuerySet``. JSON objects follow PostgreSQL ``jsonb`` key semantics,
+and incompatible NUL or unpaired-surrogate input now fails validation before any
+database query.
 
 Custom-field identifiers that collide with model fields, relation attnames,
 runtime model attributes, or serializer fields are now rejected with
 ``ImproperlyConfigured`` before annotations or serializer fields are built. This
 check includes filtered, excluded, and type-specific definitions.
+Applications can register attributes created only at instance runtime through the
+model's inherited ``_custom_field_reserved_identifiers`` declaration.
 
 This release supports the latest Django 4.2 patch on Python 3.12 and the latest
-Django 5.2 patch on Python 3.13. It requires Django REST Framework ``>3.17,<3.18``.
+Django 5.2 patch on Python 3.13. It requires Django REST Framework
+``>=3.17.1,<3.18`` and continuously tests both that lower bound and the latest
+3.17 patch.
 Before upgrading, custom serializers must use writable type selectors which persist
 the configured type relation. Custom list serializers must inherit from
 ``CustomFieldListSerializer``; validators which change item identity, order, or
 cardinality must implement ``get_paired_item_serializers()``.
+
+Abstract custom-field model and manager classes must be imported directly from
+``django_features.custom_fields.models.base``. They are no longer re-exported by
+the ``models`` package in order to avoid circular imports during Django startup.
 
 Custom-field defaults are create-only. Full and partial updates preserve omitted
 custom values and do not apply those defaults, while defaults on ordinary declared
@@ -45,3 +59,17 @@ DRF fields keep DRF's standard behavior. Submitting fields from another type or
 fields marked ``editable=False`` now returns field-specific validation errors.
 Configured choice defaults are resolved as ``CustomValue`` primary keys regardless
 of the serializer's request lookup field.
+
+Type resolver overrides are evaluated once per item and must match the type
+ultimately persisted by validated data. Null and nested-default serializer values
+retain DRF's normal short-circuit behavior. Resolver hooks can inspect a safe
+static-field view without recursively caching the wrong type. Declared nested
+serializers resolve non-null input and item-scoped model/default representation
+without revalidating defaults. Changing an object's type invalidates its
+type-dependent annotation keys without deleting historical custom values.
+Serializers expose the already-resolved applicable identifiers for zero-query
+post-save representation.
+
+Wheel and source distributions include compiled German, English, and French
+catalogs. Editable installations continue to use the source tree and require an
+explicit ``bin/i18n_update`` when compiled development catalogs are needed.

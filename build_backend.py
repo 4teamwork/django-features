@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from typing import Iterator
 
-import polib
+import polib  # type: ignore[import-untyped]
 from poetry.core.masonry import api as poetry_api
 
 
@@ -17,12 +17,13 @@ get_requires_for_build_sdist = poetry_api.get_requires_for_build_sdist
 get_requires_for_build_editable = poetry_api.get_requires_for_build_editable
 prepare_metadata_for_build_wheel = poetry_api.prepare_metadata_for_build_wheel
 prepare_metadata_for_build_editable = poetry_api.prepare_metadata_for_build_editable
+build_editable = poetry_api.build_editable
 
 
 @contextmanager
-def _compiled_catalogs() -> Iterator[None]:
+def _compiled_catalogs(project_root: Path | None = None) -> Iterator[None]:
     """Compile every PO catalog and restore the source tree after the build."""
-    project_root = Path(__file__).resolve().parent
+    project_root = project_root or Path(__file__).resolve().parent
     po_paths = sorted(
         (project_root / "django_features" / "locale").glob("*/LC_MESSAGES/*.po")
     )
@@ -77,17 +78,4 @@ def build_sdist(
         poetry_api.build_sdist,
         sdist_directory,
         config_settings,
-    )
-
-
-def build_editable(
-    wheel_directory: str,
-    config_settings: dict[str, Any] | None = None,
-    metadata_directory: str | None = None,
-) -> str:
-    return _build_with_catalogs(
-        poetry_api.build_editable,
-        wheel_directory,
-        config_settings,
-        metadata_directory,
     )

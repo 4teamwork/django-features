@@ -1,9 +1,11 @@
 import copy
 from collections.abc import Hashable
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Any
+from typing import Iterator
 from typing import NamedTuple
 
 from django.core.exceptions import FieldDoesNotExist
@@ -41,6 +43,12 @@ class CustomChoiceSerializer(serializers.ModelSerializer):
 
 class CustomFieldSerializer(serializers.ModelSerializer):
     choices = serializers.SerializerMethodField()
+    type_content_type_app_label = serializers.CharField(
+        source="type_content_type.app_label", allow_null=True, read_only=True
+    )
+    type_content_type_model = serializers.CharField(
+        source="type_content_type.model", allow_null=True, read_only=True
+    )
 
     class Meta:
         model = get_custom_field_model()
@@ -64,6 +72,8 @@ class CustomFieldSerializer(serializers.ModelSerializer):
             "filterable",
             "required",
             "type_content_type",
+            "type_content_type_app_label",
+            "type_content_type_model",
             "type_id",
         ]
 
@@ -166,13 +176,26 @@ class CustomFieldListSerializer(serializers.ListSerializer):
         self._validated_list_data: list[Any] | _NoValidatedListData = (
             NO_VALIDATED_LIST_DATA
         )
+        self._custom_field_validation_proceeded = False
 
-    def to_internal_value(self, data: Any) -> list[Any]:
+    def _reset_custom_field_validation_state(self) -> None:
         self._validated_item_serializers = []
         self._validated_item_values = ()
         self._paired_item_serializers = []
         self._paired_item_values = ()
         self._validated_list_data = NO_VALIDATED_LIST_DATA
+        self._custom_field_validation_proceeded = False
+
+    def validate_empty_values(self, data: Any) -> tuple[bool, Any]:
+        is_empty, value = super().validate_empty_values(data)
+        self._custom_field_validation_proceeded = not is_empty
+        return is_empty, value
+
+    def to_internal_value(self, data: Any) -> list[Any]:
+        self._reset_custom_field_validation_state()
+        # ``to_internal_value`` can also be called directly, without the normal
+        # ``run_validation`` lifecycle.
+        self._custom_field_validation_proceeded = True
         values = super().to_internal_value(data)
         self._validated_item_values = tuple(values)
         return values
@@ -215,7 +238,17 @@ class CustomFieldListSerializer(serializers.ListSerializer):
         return list(self._validated_item_serializers)
 
     def run_validation(self, data: Any = empty) -> Any:
+        self._reset_custom_field_validation_state()
         validated_data = super().run_validation(data)
+        if not self._custom_field_validation_proceeded:
+            # DRF returns explicit nulls and defaults without running child or
+            # list validation. Preserve that lifecycle instead of attempting to
+            # pair values which were never processed by an item serializer.
+            return validated_data
+        if not isinstance(validated_data, list):
+            raise ImproperlyConfigured(
+                f"{type(self).__name__}.validate() must return a list."
+            )
         paired_item_serializers = self.get_paired_item_serializers(validated_data)
         if len(paired_item_serializers) != len(validated_data):
             raise AssertionError(
@@ -341,10 +374,34 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         data: Any = empty,
         **kwargs: Any,
     ) -> None:
+        type_id_override = self.get_custom_field_type_id
+        self._custom_field_type_id_override = (
+            type_id_override
+            if getattr(type_id_override, "__func__", None)
+            is not CustomFieldBaseModelSerializer.get_custom_field_type_id
+            else None
+        )
+        if self._custom_field_type_id_override is not None:
+            # Keep the documented override hook backwards compatible while
+            # ensuring all subsequent public and framework calls use the same
+            # finalized, cached resolution. The original bound override remains
+            # available privately and may safely call ``super()``.
+            self.__dict__["get_custom_field_type_id"] = (
+                self._get_final_custom_field_type_id
+            )
         self._item_serializer_kwargs = dict(kwargs)
         self._custom_field_type_resolution: (
             CustomFieldTypeResolution | _UnresolvedCustomFieldType
         ) = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._default_custom_field_type_resolution: (
+            CustomFieldTypeResolution | _UnresolvedCustomFieldType
+        ) = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._custom_field_type_override_result: (
+            int | None | _UnresolvedCustomFieldType
+        ) = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._custom_field_type_override_in_progress = False
+        self._custom_field_validation_proceeded = False
+        self._custom_field_validation_input: Any = empty
         self._custom_field_type_preview_depth = 0
         self._static_serializer_fields: dict[str, serializers.Field] | None = None
         self._custom_fields = []
@@ -352,8 +409,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self._all_custom_field_identifiers_resolved = False
         self._model_custom_field_identifiers: set[str] = set()
         self._model_custom_field_identifiers_resolved = False
-        self._custom_field_definition_cache: CustomFieldDefinitionCache | None = (
-            kwargs.pop("_custom_field_definition_cache", None)
+        definition_cache: CustomFieldDefinitionCache | None = kwargs.pop(
+            "_custom_field_definition_cache", None
+        )
+        self._custom_field_definition_cache: CustomFieldDefinitionCache = (
+            definition_cache
+            if definition_cache is not None
+            else CustomFieldDefinitionCache()
         )
         self.exclude_custom_fields: bool = kwargs.pop(
             "exclude_custom_fields", self._exclude_custom_fields
@@ -457,6 +519,36 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     def _ensure_fields_initialized(self) -> dict[str, serializers.Field]:
         return self.fields
 
+    @contextmanager
+    def _static_fields_during_type_resolution(self) -> Iterator[None]:
+        """Expose an independent static field view during recursive inspection.
+
+        Selector conversion/default hooks and ``get_custom_field_type_id()`` may
+        inspect ``self.fields`` while the final dynamic field set is still being
+        selected.  A nested ``fields`` access must neither bind the shared static
+        field instances nor leave a default-type field set cached on the serializer.
+        """
+        fields_were_cached = "fields" in self.__dict__
+        cached_fields = self.__dict__.get("fields")
+        self._custom_field_type_preview_depth += 1
+        try:
+            yield
+        finally:
+            self._custom_field_type_preview_depth -= 1
+            if fields_were_cached:
+                self.__dict__["fields"] = cached_fields
+            else:
+                self.__dict__.pop("fields", None)
+
+    def _reset_type_dependent_field_state(self) -> None:
+        """Discard fields resolved before a nested serializer received its input."""
+        self._custom_field_type_resolution = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._default_custom_field_type_resolution = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._custom_field_type_override_result = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._static_serializer_fields = None
+        self._custom_fields = []
+        self.__dict__.pop("fields", None)
+
     @property
     def _filter_cache_key(self) -> Hashable:
         return tuple(sorted((key, repr(value)) for key, value in self.filter.items()))
@@ -467,7 +559,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             return self._model_custom_field_identifiers
 
         cache = self._custom_field_definition_cache
-        if cache is not None and self.model in cache.identifiers_by_model:
+        if self.model in cache.identifiers_by_model:
             identifiers = cache.identifiers_by_model[self.model]
         else:
             identifiers = set(
@@ -475,8 +567,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 .objects.for_model(self.model)
                 .values_list("identifier", flat=True)
             )
-            if cache is not None:
-                cache.identifiers_by_model[self.model] = identifiers
+            cache.identifiers_by_model[self.model] = identifiers
 
         self._model_custom_field_identifiers = identifiers
         self._model_custom_field_identifiers_resolved = True
@@ -513,12 +604,11 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self._custom_fields = []
         cache = self._custom_field_definition_cache
         cache_key = self.get_custom_fields_cache_key()
-        if cache is not None and cache_key in cache.fields_by_type:
+        if cache_key in cache.fields_by_type:
             custom_fields = cache.fields_by_type[cache_key]
         else:
             custom_fields = list(self.get_custom_fields_queryset())
-            if cache is not None:
-                cache.fields_by_type[cache_key] = custom_fields
+            cache.fields_by_type[cache_key] = custom_fields
 
         self._all_custom_field_identifiers = self.get_all_custom_field_identifiers()
         for field in custom_fields:
@@ -568,7 +658,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
 
         filter_key = self._filter_cache_key
         cache = self._custom_field_definition_cache
-        if cache is not None and filter_key in cache.identifiers_by_filter:
+        if filter_key in cache.identifiers_by_filter:
             identifiers = cache.identifiers_by_filter[filter_key]
         else:
             identifiers = set(
@@ -577,8 +667,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 .filter(**self.filter)
                 .values_list("identifier", flat=True)
             )
-            if cache is not None:
-                cache.identifiers_by_filter[filter_key] = identifiers
+            cache.identifiers_by_filter[filter_key] = identifiers
 
         self._all_custom_field_identifiers = identifiers
         self._all_custom_field_identifiers_resolved = True
@@ -587,12 +676,22 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     def is_known_custom_field_identifier(self, identifier: str) -> bool:
         return identifier in self.get_all_custom_field_identifiers()
 
+    def get_applicable_custom_field_identifiers(self) -> set[str]:
+        """Return identifiers selected for this serializer's resolved type.
+
+        Initializing ``fields`` resolves the definition set once. Calls made
+        after validation or representation reuse that in-memory set without a
+        model refresh or another definitions query.
+        """
+        self._ensure_fields_initialized()
+        return {field.identifier for field in self._custom_fields}
+
     def get_custom_field_type_input_field(self) -> str | None:
         return self.custom_field_type_input_field
 
     def get_custom_fields_cache_key(self) -> Hashable:
         """Return the per-list cache key for the applicable custom fields."""
-        return self.get_custom_field_type_id(), self._filter_cache_key
+        return self._get_custom_field_type_resolution().type_id, self._filter_cache_key
 
     def for_item(
         self, instance: Any = None, data: Any = empty
@@ -670,10 +769,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         # callable so stateful and context-aware defaults retain normal semantics.
         preview_field.default = serializer_field.default
         preview_field.bind(field_name=input_field, parent=self)
-        fields_were_cached = "fields" in self.__dict__
-        cached_fields = self.__dict__.get("fields")
-        self._custom_field_type_preview_depth += 1
-        try:
+        with self._static_fields_during_type_resolution():
             primitive_value = preview_field.get_value(initial_data)
             if (
                 isinstance(preview_field, serializers.RelatedField)
@@ -713,14 +809,6 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             elif conversion_attempted:
                 setattr(serializer_field, "to_internal_value", replay)
             return converted
-        finally:
-            self._custom_field_type_preview_depth -= 1
-            if fields_were_cached:
-                self.__dict__["fields"] = cached_fields
-            else:
-                # A recursive ``parent.fields`` access caches the provisional static
-                # view. Discard it so the outer/later access builds the complete set.
-                self.__dict__.pop("fields", None)
 
     @staticmethod
     def _normalize_custom_field_type_id(value: Any) -> int | None:
@@ -750,7 +838,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         config: CustomFieldTypeConfig,
     ) -> CustomFieldTypeResolution | None:
         serializer_field = config.serializer_field
-        initial_data = getattr(self, "initial_data", empty)
+        initial_data = self._custom_field_validation_input
+        if initial_data is empty:
+            initial_data = getattr(self, "initial_data", empty)
         if (
             serializer_field is None
             or serializer_field.read_only
@@ -777,7 +867,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
 
         try:
             type_id = self._normalize_custom_field_type_id(converted)
-        except (TypeError, ValueError):
+        except (OverflowError, TypeError, ValueError):
             return self._resolution_with_selection(
                 config=config,
                 type_id=None,
@@ -798,6 +888,25 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         type_attr = self.custom_field_type_attr
         if isinstance(self.instance, self.model) and type_attr:
             type_id = getattr(self.instance, f"{type_attr}_id", None)
+        elif isinstance(self.instance, Mapping) and type_attr:
+            sources = ((config.source,) if config is not None else ()) + (
+                type_attr,
+                f"{type_attr}_id",
+            )
+            for source in dict.fromkeys(sources):
+                if source not in self.instance:
+                    continue
+                try:
+                    type_id = self._normalize_custom_field_type_id(
+                        self.instance[source]
+                    )
+                except (OverflowError, TypeError, ValueError) as exc:
+                    raise ImproperlyConfigured(
+                        f"{type(self).__name__} representation value '{source}' "
+                        "must contain a numeric custom field type primary key or "
+                        "model instance."
+                    ) from exc
+                break
         if config is None:
             return CustomFieldTypeResolution(type_id=type_id)
         return self._resolution_with_selection(
@@ -806,18 +915,124 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             must_be_present=False,
         )
 
-    def get_custom_field_type_id(self) -> int | None:
-        cached_resolution = self._custom_field_type_resolution
+    def _get_default_custom_field_type_resolution(
+        self,
+    ) -> CustomFieldTypeResolution:
+        cached_resolution = self._default_custom_field_type_resolution
         if isinstance(cached_resolution, CustomFieldTypeResolution):
-            return cached_resolution.type_id
-
+            return cached_resolution
         config = self._get_custom_field_type_config()
         input_resolution = (
             self._type_resolution_from_input(config) if config is not None else None
         )
         resolution = input_resolution or self._type_resolution_from_instance(config)
+        self._default_custom_field_type_resolution = resolution
+        return resolution
+
+    def _has_item_context_for_type_override(self) -> bool:
+        input_data = self._custom_field_validation_input
+        if input_data is empty:
+            input_data = getattr(self, "initial_data", empty)
+        return isinstance(input_data, Mapping) or isinstance(
+            self.instance,
+            (self.model, Mapping),
+        )
+
+    def _type_resolution_from_override(
+        self,
+        default_resolution: CustomFieldTypeResolution,
+        overridden_type_id: int | None,
+    ) -> CustomFieldTypeResolution:
+        selection = default_resolution.selection
+        if selection is not None:
+            selection = CustomFieldTypeSelection(
+                input_field=selection.input_field,
+                source=selection.source,
+                type_id=overridden_type_id,
+                must_be_present=(
+                    selection.must_be_present
+                    or overridden_type_id != default_resolution.type_id
+                ),
+                resolved=selection.resolved,
+            )
+        elif self.custom_field_type_attr:
+            # An override may intentionally select the type from context or an
+            # alternate input. It still has to persist that type on the model's
+            # configured relation before type-specific custom values are written.
+            type_attr = self.custom_field_type_attr
+            instance_type_id = None
+            if isinstance(self.instance, self.model):
+                instance_type_id = getattr(self.instance, f"{type_attr}_id", None)
+            selection = CustomFieldTypeSelection(
+                input_field=type_attr,
+                source=type_attr,
+                type_id=overridden_type_id,
+                must_be_present=overridden_type_id != instance_type_id,
+            )
+        return CustomFieldTypeResolution(
+            type_id=overridden_type_id,
+            selection=selection,
+        )
+
+    def _get_custom_field_type_resolution(self) -> CustomFieldTypeResolution:
+        cached_resolution = self._custom_field_type_resolution
+        if isinstance(cached_resolution, CustomFieldTypeResolution):
+            return cached_resolution
+
+        default_resolution = self._get_default_custom_field_type_resolution()
+        if self._custom_field_type_override_in_progress:
+            return default_resolution
+        defer_nested_override = (
+            self.parent is not None and not self._has_item_context_for_type_override()
+        )
+        if (
+            default_resolution.failed
+            or self._custom_field_type_id_override is None
+            or defer_nested_override
+        ):
+            resolution = default_resolution
+        else:
+            override_result = self._custom_field_type_override_result
+            if isinstance(override_result, _UnresolvedCustomFieldType):
+                self._custom_field_type_override_in_progress = True
+                try:
+                    with self._static_fields_during_type_resolution():
+                        overridden_value = self._custom_field_type_id_override()
+                finally:
+                    self._custom_field_type_override_in_progress = False
+                try:
+                    overridden_type_id = self._normalize_custom_field_type_id(
+                        overridden_value
+                    )
+                except (OverflowError, TypeError, ValueError) as exc:
+                    raise ImproperlyConfigured(
+                        f"{type(self).__name__}.get_custom_field_type_id() must "
+                        "return a numeric primary key or None."
+                    ) from exc
+                self._custom_field_type_override_result = overridden_type_id
+            else:
+                overridden_type_id = override_result
+            resolution = self._type_resolution_from_override(
+                default_resolution,
+                overridden_type_id,
+            )
+
         self._custom_field_type_resolution = resolution
-        return resolution.type_id
+        return resolution
+
+    def _get_final_custom_field_type_id(self) -> int | None:
+        return self._get_custom_field_type_resolution().type_id
+
+    def get_custom_field_type_id(self) -> int | None:
+        """Return the selected type ID.
+
+        Framework code finalizes and caches overrides of this hook through
+        ``_get_custom_field_type_resolution``. During ``super()`` calls from an
+        override, return the default input/instance resolution without recursing.
+        """
+        if self._custom_field_type_override_in_progress:
+            return self._get_default_custom_field_type_resolution().type_id
+        return self._get_custom_field_type_resolution().type_id
 
     def _get_validated_custom_field_type_id(
         self,
@@ -829,7 +1044,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     ) -> int | None:
         type_attr = self.custom_field_type_attr
         if not type_attr:
-            return self._normalize_custom_field_type_id(validated_type)
+            try:
+                return self._normalize_custom_field_type_id(validated_type)
+            except (OverflowError, TypeError, ValueError) as exc:
+                raise ImproperlyConfigured(
+                    f"{type(self).__name__}.{selection.input_field} must "
+                    "validate to a numeric custom field type primary key."
+                ) from exc
 
         source = source or selection.source
         type_model = self.custom_field_type_model
@@ -853,7 +1074,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
 
         try:
             type_id = self._normalize_custom_field_type_id(validated_type)
-        except (TypeError, ValueError) as exc:
+        except (OverflowError, TypeError, ValueError) as exc:
             raise ImproperlyConfigured(
                 f"{type(self).__name__}.{selection.input_field} must validate to "
                 "a numeric custom field type primary key."
@@ -908,14 +1129,18 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         *,
         validate_existence: bool = True,
     ) -> None:
-        resolution = self._custom_field_type_resolution
-        if not isinstance(resolution, CustomFieldTypeResolution):
+        if self.exclude_custom_fields:
+            # Type selection exists only to choose and protect dynamic fields.
+            # With those fields excluded, the selector remains an ordinary DRF
+            # field and must not be previewed, converted, or defaulted twice.
             return
+        resolution = self._get_custom_field_type_resolution()
         selection = resolution.selection
         if selection is None:
             return
 
         validated_type = validated_data.get(selection.source, empty)
+        validated_type_present = validated_type is not empty
         type_attr = self.custom_field_type_attr
         alternate_sources = []
         if type_attr:
@@ -925,48 +1150,88 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 if source != selection.source and source in validated_data
             ]
 
-        if (
-            validated_type is empty
-            and not selection.must_be_present
-            and not alternate_sources
-        ):
-            return
-        policy_value = (
-            validated_type
-            if validated_type is not empty
-            else (validated_data[alternate_sources[0]] if alternate_sources else empty)
-        )
+        validated_source = selection.source
+        if not validated_type_present and alternate_sources:
+            validated_source = alternate_sources[0]
+            validated_type = validated_data[validated_source]
         if not self.should_validate_custom_field_type_selection(
             selection,
-            policy_value,
+            validated_type,
         ):
             return
         if validated_type is empty:
             if selection.must_be_present or not selection.resolved:
                 raise self._custom_field_type_mismatch_error(selection)
-        else:
-            validated_type_id = self._get_validated_custom_field_type_id(
-                selection,
-                validated_type,
-                validate_existence=validate_existence,
-            )
-            if not selection.resolved or validated_type_id != selection.type_id:
-                raise self._custom_field_type_mismatch_error(selection)
+            return
+        validated_type_id = self._get_validated_custom_field_type_id(
+            selection,
+            validated_type,
+            source=validated_source,
+            validate_existence=validate_existence,
+        )
+        if not selection.resolved or validated_type_id != selection.type_id:
+            raise self._custom_field_type_mismatch_error(selection)
 
         for alternate_source in alternate_sources:
+            if alternate_source == validated_source:
+                continue
             alternate_id = self._get_validated_custom_field_type_id(
                 selection,
                 validated_data[alternate_source],
                 source=alternate_source,
                 validate_existence=validate_existence,
             )
-            if validated_type is not empty or alternate_id != selection.type_id:
+            if validated_type_present or alternate_id != selection.type_id:
                 raise self._custom_field_type_mismatch_error(selection)
 
     def run_validation(self, data: Any = empty) -> Any:
-        validated_data = super().run_validation(data)
-        self._validate_custom_field_type_selection(validated_data)
-        return validated_data
+        self._custom_field_validation_proceeded = False
+        previous_validation_input = self._custom_field_validation_input
+        self._custom_field_validation_input = data
+        if (
+            not self.exclude_custom_fields
+            and isinstance(data, Mapping)
+            and not hasattr(self, "initial_data")
+        ):
+            # Declared nested serializers receive their raw value through this
+            # method; DRF does not assign it to ``initial_data``. Rebuild any
+            # prematurely inspected global field set for the actual nested item.
+            self._reset_type_dependent_field_state()
+        try:
+            validated_data = super().run_validation(data)
+            if not self._custom_field_validation_proceeded:
+                # DRF returns explicit nulls and defaults without converting or
+                # validating them. They must remain untouched by dynamic-type policy.
+                return validated_data
+            if not isinstance(validated_data, Mapping):
+                raise ImproperlyConfigured(
+                    f"{type(self).__name__} must return a mapping from "
+                    "to_internal_value()."
+                )
+            self._validate_custom_field_type_selection(validated_data)
+            return validated_data
+        finally:
+            self._custom_field_validation_input = previous_validation_input
+
+    def validate_empty_values(self, data: Any) -> tuple[bool, Any]:
+        is_empty, value = super().validate_empty_values(data)
+        self._custom_field_validation_proceeded = not is_empty
+        return is_empty, value
+
+    def to_representation(self, instance: Any) -> Any:
+        if (
+            self.instance is not instance
+            and not self._custom_field_validation_proceeded
+            and isinstance(instance, (self.model, Mapping))
+        ):
+            item_serializer = self.for_item(instance=instance)
+            # Run the serializer chain below this base class on the item-scoped
+            # serializer. Subclass representation hooks surrounding ``super()``
+            # therefore still run exactly once on the original serializer.
+            return super(
+                CustomFieldBaseModelSerializer, item_serializer
+            ).to_representation(instance)
+        return super().to_representation(instance)
 
     def get_custom_fields_queryset(self) -> CustomFieldQuerySet:
         queryset = get_custom_field_model().objects.for_model(self.model)
@@ -977,7 +1242,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     "A configured custom-field type must have a model."
                 )
             queryset = queryset.for_model_and_type(
-                self.model, type_model, self.get_custom_field_type_id()
+                self.model,
+                type_model,
+                self._get_custom_field_type_resolution().type_id,
             )
         return queryset.filter(**self.filter)
 

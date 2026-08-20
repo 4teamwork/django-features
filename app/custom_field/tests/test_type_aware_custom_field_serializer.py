@@ -153,6 +153,166 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
             person.custom_values.filter(field=self.first_field, value="typed").exists()
         )
 
+    def test_type_id_override_is_finalized_once_and_must_be_persisted(self) -> None:
+        calls: list[int | None] = []
+
+        class OverriddenTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int | None:
+                selected = super().get_custom_field_type_id()
+                calls.append(selected)
+                return selected
+
+        serializer = OverriddenTypePersonSerializer(
+            data={
+                "firstname": "Overridden",
+                "person_type": self.first_type.pk,
+                "first_value": "typed",
+            }
+        )
+
+        self.assertIn("first_value", serializer.fields)
+        self.assertEqual(
+            serializer.get_custom_fields_cache_key(),
+            (self.first_type.pk, ()),
+        )
+        self.assertEqual(serializer.get_custom_field_type_id(), self.first_type.pk)
+        self.assertEqual(serializer.get_custom_field_type_id(), self.first_type.pk)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(calls, [self.first_type.pk])
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
+
+    def test_type_id_override_cannot_authorize_an_unpersisted_type(self) -> None:
+        calls: list[int] = []
+
+        class ExternalTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int:
+                selected = int(self.initial_data["external_type"])
+                calls.append(selected)
+                return selected
+
+        serializer = ExternalTypePersonSerializer(
+            data={
+                "firstname": "Unpersisted",
+                "external_type": self.first_type.pk,
+                "first_value": "must not be saved",
+            }
+        )
+
+        self.assertIn("first_value", serializer.fields)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("person_type", serializer.errors)
+        self.assertEqual(calls, [self.first_type.pk])
+        self.assertFalse(Person.objects.filter(firstname="Unpersisted").exists())
+
+    def test_type_id_override_rejects_infinite_values_without_querying(self) -> None:
+        class InfiniteTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> float:  # type: ignore[override]
+                return float("inf")
+
+        serializer = InfiniteTypePersonSerializer(data={"firstname": "Infinite"})
+
+        with self.assertNumQueries(0), self.assertRaisesRegex(
+            ImproperlyConfigured,
+            "must return a numeric primary key or None",
+        ):
+            serializer.get_custom_field_type_id()
+
+    def test_type_id_override_can_inject_and_persist_its_selected_type(self) -> None:
+        calls: list[int] = []
+
+        class ExternalTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int:
+                selected = int(self.initial_data["external_type"])
+                calls.append(selected)
+                return selected
+
+            def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+                attrs["person_type"] = self.context["selected_type"]
+                return attrs
+
+        serializer = ExternalTypePersonSerializer(
+            data={
+                "firstname": "Persisted",
+                "external_type": self.first_type.pk,
+                "first_value": "typed",
+            },
+            context={"selected_type": self.first_type},
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(calls, [self.first_type.pk])
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
+
+    def test_many_type_id_overrides_are_item_scoped_and_persisted(self) -> None:
+        calls: list[int] = []
+
+        class ExternalTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int:
+                selected = int(self.initial_data["external_type"])
+                calls.append(selected)
+                return selected
+
+            def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+                attrs["person_type_id"] = self.get_custom_field_type_id()
+                return attrs
+
+        serializer = ExternalTypePersonSerializer(
+            data=[
+                {
+                    "firstname": "First override",
+                    "external_type": self.first_type.pk,
+                    "first_value": "first",
+                },
+                {
+                    "firstname": "Second override",
+                    "external_type": self.second_type.pk,
+                    "second_value": "second",
+                },
+            ],
+            many=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        first, second = serializer.save()
+
+        self.assertEqual(calls, [self.first_type.pk, self.second_type.pk])
+        self.assertEqual(first.person_type, self.first_type)
+        self.assertEqual(second.person_type, self.second_type)
+        self.assertTrue(first.custom_values.filter(field=self.first_field).exists())
+        self.assertTrue(second.custom_values.filter(field=self.second_field).exists())
+
+    def test_type_id_override_cannot_replace_invalid_selector_input(self) -> None:
+        calls: list[int] = []
+
+        class FallbackTypePersonSerializer(TypeAwarePersonSerializer):
+            def get_custom_field_type_id(self) -> int:
+                calls.append(self.first_type_id)
+                return self.first_type_id
+
+            @property
+            def first_type_id(self) -> int:
+                return self.context["fallback_type"].pk
+
+        serializer = FallbackTypePersonSerializer(
+            data={
+                "firstname": "Invalid selector",
+                "person_type": 999_999,
+                "first_value": "must not be accepted",
+            },
+            context={"fallback_type": self.first_type},
+        )
+
+        self.assertNotIn("first_value", serializer.fields)
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(serializer.errors["person_type"][0].code, "does_not_exist")
+        self.assertEqual(calls, [])
+
     def test_slug_related_type_input_selects_and_persists_typed_fields(self) -> None:
         serializer = SlugTypePersonSerializer(
             data={
@@ -1061,6 +1221,53 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
         self.assertFalse(first.custom_values.exists())
         self.assertFalse(second.custom_values.exists())
 
+    def test_excluded_custom_fields_do_not_replay_type_conversion(self) -> None:
+        serializer = TypeAwarePersonSerializer(
+            data={
+                "firstname": "Excluded",
+                "person_type": self.first_type.pk,
+            },
+            exclude_custom_fields=True,
+        )
+
+        # One query checks model-wide identifier collisions and one performs
+        # DRF's normal related-field conversion. Type policy must not add a
+        # second relation lookup when dynamic fields are excluded.
+        with self.assertNumQueries(2):
+            is_valid = serializer.is_valid()
+
+        self.assertTrue(is_valid, serializer.errors)
+        self.assertEqual(self.first_type, serializer.validated_data["person_type"])
+
+    def test_many_excluded_custom_fields_apply_selector_defaults_once(self) -> None:
+        calls: list[int] = []
+
+        def default_person_type() -> PersonType:
+            calls.append(len(calls))
+            return self.first_type
+
+        class DefaultTypePersonSerializer(TypeAwarePersonSerializer):
+            person_type = serializers.PrimaryKeyRelatedField(
+                default=default_person_type,
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        serializer = DefaultTypePersonSerializer(
+            data=[{"firstname": "First"}, {"firstname": "Second"}],
+            many=True,
+            exclude_custom_fields=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        people = serializer.save()
+
+        self.assertEqual([0, 1], calls)
+        self.assertEqual(
+            [self.first_type, self.first_type], [p.person_type for p in people]
+        )
+        self.assertFalse(any(person.custom_values.exists() for person in people))
+
     def test_many_mapping_rejects_field_for_another_type_per_item(self) -> None:
         serializer = TypeAwarePersonMappingSerializer(
             data=[
@@ -1229,6 +1436,22 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
         self.assertNotIn("first_value", serializer.fields)
         person = serializer.save()
         self.assertEqual(person.person_type, self.second_type)
+
+    def test_applicable_identifier_accessor_reuses_resolved_update_fields(
+        self,
+    ) -> None:
+        person = PersonFactory(person_type=self.first_type)
+        serializer = TypeAwarePersonSerializer(
+            person,
+            data={"person_type": self.second_type.pk},
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        with self.assertNumQueries(0):
+            identifiers = serializer.get_applicable_custom_field_identifiers()
+
+        self.assertSetEqual(identifiers, {"default_value", "second_value"})
 
     def test_type_change_retains_but_hides_values_from_the_previous_type(
         self,

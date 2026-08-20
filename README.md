@@ -54,13 +54,15 @@ path("api/", include(custom_field_router.urls)),
 
 ### Models with custom values
 
-1. Your models with custom values should inherit from `django_features.custom_fields.models.CustomFieldBaseModel`.
+1. Your models with custom values should inherit from
+   `django_features.custom_fields.models.base.CustomFieldBaseModel`.
 2. Your models should have a relation to the custom value model. For example:
     - `custom_values = models.ManyToManyField(blank=True, to=CustomValue, verbose_name=_("Benutzerdefinierte Werte"))`
 
 #### Querysets
 
-Your querysets for the models with custom values should inherit from `django_features.custom_fields.models.CustomFieldModelBaseManager`.
+Your managers for models with custom values should inherit from
+`django_features.custom_fields.models.base.CustomFieldModelBaseManager`.
 
 #### Serializers
 
@@ -148,7 +150,9 @@ because those fields cannot be selected until the default resolves the type.
 
 Changing an object's type does not delete stored values belonging to its previous
 type. Those values are omitted from serialization and cannot be submitted while
-the new type is selected.
+the new type is selected. Changing the type invalidates the instance's annotated
+``custom_field_keys`` cache without querying the database. Use ``set_custom_attr()``
+for a subsequent dynamic-field write so the applicable keys are refreshed lazily.
 
 The following hooks can be overridden for application-specific behavior:
 
@@ -158,6 +162,9 @@ The following hooks can be overridden for application-specific behavior:
 - `get_custom_fields_cache_key()` identifies definition sets that may safely be
   shared between list items. Override it when custom field selection depends on
   additional per-item state.
+- `get_applicable_custom_field_identifiers()` returns the identifiers selected
+  for the resolved type. It initializes the dynamic field set once and reuses it
+  without refreshing the model or issuing another definitions query.
 - `should_validate_custom_field_type_selection()` can defer the final
   selector/source consistency check for serializers which intentionally persist
   an intermediate relation value, such as `MappingSerializer`.
@@ -170,6 +177,18 @@ The following hooks can be overridden for application-specific behavior:
   how the per-item serializers are paired after list-level validation. Override
   it when a custom list validator intentionally changes item positions or
   identities.
+
+The selected type is resolved once for each serializer item. An override of
+`get_custom_field_type_id()` must still match the type relation ultimately present
+in validated data; selecting typed fields without persisting that type is rejected.
+Resolver overrides may inspect `self.fields`; while resolution is in progress they
+see an independent static-field view because type-specific fields cannot be known
+until the override returns.
+Successful ``allow_null`` and nested serializer-default short circuits retain
+DRF's normal behavior and are not reinterpreted or revalidated as dynamic
+object/list input. Declared nested serializers resolve non-null input from the raw
+nested mapping, and nested model or internal-default representation is scoped to
+the represented item's type.
 
 For example, an optional constructor value used by custom hooks can be copied to
 each per-item serializer after the base implementation has preserved the normal
@@ -195,7 +214,10 @@ custom fields are excluded, while continuing to process ordinary model mappings.
 Custom-field identifiers must not collide with model fields, relation attnames,
 model/runtime attributes, or writable serializer field names and sources. Such
 configuration is rejected before annotations or serializer fields are built,
-including for filtered, type-specific, and excluded definitions.
+including for filtered, type-specific, and excluded definitions. Attributes created
+only at instance runtime cannot be discovered from the model class. Declare those
+names in an immutable ``_custom_field_reserved_identifiers`` set on the concrete
+model or a model mixin; declarations are combined across the inheritance hierarchy.
 
 Submitted values for a different type and values for fields with
 `editable=False` are rejected with field-specific validation errors. Trusted
@@ -213,15 +235,23 @@ list and cannot contain duplicate lookup values. Invalid, missing, ambiguous, an
 duplicate choices produce validation errors instead of database exceptions.
 Lookup comparison follows the Django model field and preserves JSON type identity,
 so booleans, integers, and floating-point JSON values with equal Python values
-remain distinct.
+remain distinct. JSON lookup values are normalized to PostgreSQL ``jsonb`` object
+semantics. NUL and unpaired surrogate characters are rejected before a database
+query instead of surfacing as database errors.
 
 Configured choice defaults use `CustomValue` primary keys (a scalar for a single
 choice or a list for multiple choices), independently of `_unique_choice_field`.
 Request payloads continue to use the serializer's configured choice lookup.
+Multiple-choice validation returns an eager ``list`` of ``CustomValue`` instances
+in request order, not a ``CustomValueQuerySet``. Extension hooks must not rely on
+queryset methods or lazy evaluation for validated multiple-choice data.
 
 `CustomFieldSerializer` exposes the validation and type metadata clients need to
 build compatible forms, including `allow_blank`, `allow_null`, `default`,
-`editable`, `required`, `type_content_type`, and `type_id`.
+`editable`, `required`, `type_content_type`, `type_content_type_app_label`,
+`type_content_type_model`, and `type_id`. Clients should use the natural app/model
+pair together with `type_id`; a content-type primary key is installation-specific
+and is not a stable cross-system model identifier.
 
 #### Compatibility and upgrade notes
 
@@ -229,12 +259,18 @@ The supported and continuously tested combinations are:
 
 | Django | Python | Django REST Framework |
 | --- | --- | --- |
-| Latest 4.2 patch | 3.12 | Latest 3.17 patch (`>3.17,<3.18`) |
-| Latest 5.2 patch | 3.13 | Latest 3.17 patch (`>3.17,<3.18`) |
+| Latest 4.2 patch | 3.12 | 3.17.1 |
+| Latest 4.2 patch | 3.12 | Latest 3.17 patch (`>=3.17.1,<3.18`) |
+| Latest 5.2 patch | 3.13 | 3.17.1 |
+| Latest 5.2 patch | 3.13 | Latest 3.17 patch (`>=3.17.1,<3.18`) |
 
 Upgrading requires Django REST Framework 3.17.1 or newer, but not 3.18. Existing
 custom serializers should also be checked for the following behavioral contracts:
 
+- Abstract model and manager classes must be imported from
+  `django_features.custom_fields.models.base`; they are no longer re-exported by
+  `django_features.custom_fields.models`, avoiding circular imports during Django
+  application loading.
 - A type selector must be a writable field whose `source` persists the configured
   type relation or its `<relation>_id` attribute.
 - A custom `Meta.list_serializer_class` must inherit from
@@ -248,7 +284,9 @@ custom serializers should also be checked for the following behavioral contracts
   partial-update behavior.
 
 Built distributions include compiled German, English, and French gettext catalogs;
-consumers do not need to compile package translations separately.
+consumers do not need to compile package translations separately. Editable/source
+installations use the source tree directly and should run ``bin/i18n_update`` when
+compiled development catalogs are needed.
 
 ## System Message
 

@@ -3,6 +3,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.db import models
+from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from app.custom_field.models import CustomField
@@ -19,6 +20,33 @@ class ValueChoicePersonSerializer(TypeAwarePersonSerializer):
 
 class PrimaryKeyChoicePersonSerializer(TypeAwarePersonSerializer):
     _unique_choice_field = "pk"
+
+
+class TextValueValidationTest(APITestCase):
+    def test_create_rejects_postgresql_jsonb_incompatible_text(self) -> None:
+        invalid_values = (
+            ("\x00", "null_characters_not_allowed"),
+            ("\ud800", "surrogate_characters_not_allowed"),
+        )
+        for field_type in (
+            CustomField.FIELD_TYPES.CHAR,
+            CustomField.FIELD_TYPES.TEXT,
+        ):
+            field = CustomFieldFactory(
+                identifier=f"invalid_{field_type.lower()}",
+                field_type=field_type,
+            )
+            for value, error_code in invalid_values:
+                with self.subTest(field_type=field_type, error_code=error_code):
+                    serializer = TypeAwarePersonSerializer(
+                        data={"firstname": "Invalid text", field.identifier: value}
+                    )
+
+                    self.assertFalse(serializer.is_valid())
+                    self.assertEqual(
+                        serializer.errors[field.identifier][0].code,
+                        error_code,
+                    )
 
 
 class MultipleChoiceValidationTest(APITestCase):
@@ -146,6 +174,21 @@ class MultipleChoiceValidationTest(APITestCase):
 
 
 class ChoiceNormalizationTest(APITestCase):
+    def value_choice_field(
+        self,
+        identifier: str,
+        *,
+        multiple: bool = False,
+    ) -> tuple[CustomField, serializers.Field]:
+        field = CustomFieldFactory(
+            identifier=identifier,
+            choice_field=True,
+            multiple=multiple,
+        )
+        serializer_field = field.serializer_field
+        serializer_field.set_unique_field("value")
+        return field, serializer_field
+
     def test_single_value_lookup_accepts_pk_alias(self) -> None:
         field = CustomFieldFactory(identifier="pk_choice", choice_field=True)
         choice = CustomValueFactory(field=field)
@@ -273,7 +316,132 @@ class ChoiceNormalizationTest(APITestCase):
         with self.assertNumQueries(1):
             validated = serializer_field.run_validation([1.0, 1])
 
+        self.assertIsInstance(validated, list)
         self.assertEqual(validated, [float_choice, integer_choice])
+
+    def test_json_choice_lookup_matches_postgresql_normalized_negative_zero(
+        self,
+    ) -> None:
+        field = CustomFieldFactory(
+            identifier="negative_zero_json_choice",
+            choice_field=True,
+        )
+        choice = CustomValueFactory(field=field, value=-0.0)
+        serializer_field = field.serializer_field
+        serializer_field.set_unique_field("value")
+
+        choice.refresh_from_db()
+        with self.assertNumQueries(1):
+            validated = serializer_field.run_validation(-0.0)
+
+        self.assertEqual(choice.value, 0.0)
+        self.assertEqual(validated, choice)
+
+    def test_json_choice_rejects_postgresql_incompatible_unicode_before_query(
+        self,
+    ) -> None:
+        invalid_values = (
+            "\x00",
+            {"nested": "\x00"},
+            {"\x00": "value"},
+            "\ud800",
+            "\udfff",
+            {"nested": "\ud800"},
+            {"\udfff": "value"},
+        )
+
+        for multiple in (False, True):
+            _field, serializer_field = self.value_choice_field(
+                f"invalid_unicode_{multiple}",
+                multiple=multiple,
+            )
+            for value in invalid_values:
+                data = [{"value": value}] if multiple else value
+                with self.subTest(multiple=multiple, value=ascii(value)):
+                    with (
+                        self.assertNumQueries(0),
+                        self.assertRaises(ValidationError) as error,
+                    ):
+                        serializer_field.run_validation(data)
+
+                    self.assertEqual(error.exception.get_codes(), ["invalid"])
+
+    def test_json_choice_accepts_astral_unicode_and_surrogate_pair_equally(
+        self,
+    ) -> None:
+        field, serializer_field = self.value_choice_field("unicode_choice")
+        choice = CustomValueFactory(field=field, value="😀")
+
+        with self.assertNumQueries(1):
+            astral = serializer_field.run_validation("😀")
+        with self.assertNumQueries(1):
+            surrogate_pair = serializer_field.run_validation("\ud83d\ude00")
+
+        self.assertEqual(astral, choice)
+        self.assertEqual(surrogate_pair, choice)
+
+    def test_equivalent_unicode_choices_are_duplicates_before_query(self) -> None:
+        field, serializer_field = self.value_choice_field(
+            "duplicate_unicode_choices",
+            multiple=True,
+        )
+        CustomValueFactory(field=field, value="😀")
+
+        with self.assertNumQueries(0), self.assertRaises(ValidationError) as error:
+            serializer_field.run_validation(["😀", "\ud83d\ude00"])
+
+        self.assertEqual(error.exception.get_codes(), ["duplicate"])
+
+    def test_json_choice_normalizes_mixed_object_keys_like_postgresql(self) -> None:
+        field, serializer_field = self.value_choice_field("mixed_key_choice")
+        choice = CustomValueFactory(field=field, value={"1": "last"})
+
+        with self.assertNumQueries(1):
+            validated = serializer_field.run_validation(
+                {"value": {1: "first", "1": "last"}}
+            )
+
+        self.assertEqual(validated, choice)
+
+    def test_json_choice_uses_last_key_after_json_key_coercion(self) -> None:
+        field, serializer_field = self.value_choice_field("coerced_key_choice")
+        choice = CustomValueFactory(field=field, value={"1": "last"})
+
+        with self.assertNumQueries(1):
+            validated = serializer_field.run_validation(
+                {"value": {"1": "first", 1: "last"}}
+            )
+
+        self.assertEqual(validated, choice)
+
+    def test_malformed_json_structures_are_rejected_before_query(self) -> None:
+        field, serializer_field = self.value_choice_field("malformed_structure")
+        cyclic: list[object] = []
+        cyclic.append(cyclic)
+        deeply_nested: object = None
+        for _index in range(2_000):
+            deeply_nested = [deeply_nested]
+
+        invalid_values = (
+            cyclic,
+            deeply_nested,
+            {("unsupported",): "key"},
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+        )
+        for value in invalid_values:
+            with self.subTest(value=type(value).__name__):
+                with (
+                    self.assertNumQueries(0),
+                    self.assertRaises(ValidationError) as error,
+                ):
+                    serializer_field.run_validation({"value": value})
+
+                self.assertEqual(error.exception.get_codes(), ["invalid"])
+
+        # Invalid JSON must not leave the surrounding test transaction unusable.
+        self.assertEqual(field.choices.count(), 0)
 
     def test_single_json_numeric_lookup_preserves_specific_error_codes(self) -> None:
         missing_field = CustomFieldFactory(

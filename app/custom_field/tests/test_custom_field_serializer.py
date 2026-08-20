@@ -6,6 +6,7 @@ from app.custom_field.models import CustomField
 from app.custom_field.tests.factories import CustomFieldFactory
 from app.custom_field.tests.factories import CustomValueFactory
 from app.models import Person
+from app.models import PersonType
 from app.tests import APITestCase
 from django_features.custom_fields.serializers import CustomFieldSerializer
 
@@ -38,6 +39,8 @@ class CustomFieldViewSetTest(APITestCase):
                 "filterable": False,
                 "required": False,
                 "type_content_type": None,
+                "type_content_type_app_label": None,
+                "type_content_type_model": None,
                 "type_id": None,
             },
             data,
@@ -103,7 +106,25 @@ class CustomFieldViewSetTest(APITestCase):
                 "filterable": False,
                 "required": False,
                 "type_content_type": None,
+                "type_content_type_app_label": None,
+                "type_content_type_model": None,
                 "type_id": None,
             },
             data,
         )
+
+    def test_type_content_type_has_stable_natural_metadata(self) -> None:
+        person_type = PersonType.objects.create(title="Employee")
+        type_content_type = ContentType.objects.get_for_model(PersonType)
+        custom_field = CustomFieldFactory(
+            identifier="employee_number",
+            content_type=ContentType.objects.get_for_model(Person),
+            type_content_type=type_content_type,
+            type_id=person_type.pk,
+        )
+
+        data = CustomFieldSerializer(custom_field).data
+
+        self.assertEqual(type_content_type.pk, data["type_content_type"])
+        self.assertEqual("app", data["type_content_type_app_label"])
+        self.assertEqual("persontype", data["type_content_type_model"])
