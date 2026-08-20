@@ -17,6 +17,10 @@ class ValueChoicePersonSerializer(TypeAwarePersonSerializer):
     _unique_choice_field = "value"
 
 
+class PrimaryKeyChoicePersonSerializer(TypeAwarePersonSerializer):
+    _unique_choice_field = "pk"
+
+
 class MultipleChoiceValidationTest(APITestCase):
     def setUp(self) -> None:
         self.field = CustomFieldFactory(
@@ -142,6 +146,41 @@ class MultipleChoiceValidationTest(APITestCase):
 
 
 class ChoiceNormalizationTest(APITestCase):
+    def test_single_value_lookup_accepts_pk_alias(self) -> None:
+        field = CustomFieldFactory(identifier="pk_choice", choice_field=True)
+        choice = CustomValueFactory(field=field)
+        serializer = PrimaryKeyChoicePersonSerializer(
+            data={"firstname": "Primary key", field.identifier: str(choice.pk)}
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertSetEqual(
+            set(person.custom_values.values_list("pk", flat=True)), {choice.pk}
+        )
+
+    def test_multiple_value_lookup_accepts_pk_alias(self) -> None:
+        field = CustomFieldFactory(
+            identifier="multiple_pk_choices", choice_field=True, multiple=True
+        )
+        first = CustomValueFactory(field=field)
+        second = CustomValueFactory(field=field)
+        serializer = PrimaryKeyChoicePersonSerializer(
+            data={
+                "firstname": "Primary keys",
+                field.identifier: [str(first.pk), {"pk": second.pk}],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertSetEqual(
+            set(person.custom_values.values_list("pk", flat=True)),
+            {first.pk, second.pk},
+        )
+
     def test_boolean_values_are_valid_for_json_choice_lookups(self) -> None:
         single_field = CustomFieldFactory(
             identifier="single_boolean_choice",
@@ -291,17 +330,25 @@ class ChoiceNormalizationTest(APITestCase):
 
     def test_uuid_strings_are_normalized_by_the_model_field(self) -> None:
         field = CustomFieldFactory(identifier="uuid_choice", choice_field=True)
-        serializer_field = field.serializer_field
         value = uuid4()
         custom_value_model = MagicMock()
-        custom_value_model._meta.get_field.return_value = models.UUIDField()
+        field_info = MagicMock(fields_and_pk={"id": models.UUIDField()})
 
-        with patch(
-            "django_features.custom_fields.fields.get_custom_value_model",
-            return_value=custom_value_model,
+        with (
+            patch(
+                "django_features.custom_fields.fields.get_custom_value_model",
+                return_value=custom_value_model,
+            ) as get_custom_value_model,
+            patch(
+                "django_features.custom_fields.fields.get_field_info",
+                return_value=field_info,
+            ) as get_field_info,
         ):
+            serializer_field = field.serializer_field
             normalized = serializer_field._normalize_choice(str(value))
             with self.assertRaises(ValidationError):
                 serializer_field._normalize_choice(True)
 
         self.assertEqual(normalized, value)
+        get_custom_value_model.assert_called_once_with()
+        get_field_info.assert_called_once_with(custom_value_model)

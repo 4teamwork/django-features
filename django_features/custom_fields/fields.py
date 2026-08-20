@@ -1,6 +1,7 @@
 import json
 from collections.abc import Mapping
 from typing import Any
+from typing import NoReturn
 
 from django.core.exceptions import MultipleObjectsReturned
 from django.core.exceptions import ObjectDoesNotExist
@@ -22,6 +23,7 @@ from django_features.custom_fields.serializers import CustomChoiceSerializer
 
 class ChoiceIdField(serializers.Field):
     _unique_field: str | None = None
+    _model_field: models.Field
     default_error_messages = {
         "empty": _("This list may not be empty."),
     }
@@ -46,6 +48,7 @@ class ChoiceIdField(serializers.Field):
                 f"The unique_field must be a valid field of {valid_fields}: "
                 f"invalid field {self._unique_field}"
             )
+        self._model_field = valid_fields[self._unique_field]
 
     def get_queryset(self) -> CustomValueQuerySet:
         return get_custom_value_model().objects.filter(field_id=self.field.id)
@@ -65,20 +68,30 @@ class ChoiceIdField(serializers.Field):
         try:
             return self.get_queryset().get(**{self._unique_field: value})
         except MultipleObjectsReturned:
-            raise ValidationError(
-                _(
-                    "Multiple custom values match '%(field)s': %(values)s. "
-                    "Choice lookup values must be unique within a custom field."
-                )
-                % {"field": self._unique_field, "values": [value]},
-                code="multiple_matches",
-            )
+            self._ambiguous([value])
         except (ObjectDoesNotExist, OverflowError, TypeError, ValueError):
             raise ValidationError(
                 _("Custom value with the %(field)s %(value)s does not exist.")
                 % {"field": self._unique_field, "value": value},
                 code="does_not_exist",
             )
+
+    def _ambiguous(self, values: list[Any]) -> NoReturn:
+        raise ValidationError(
+            _(
+                "Multiple custom values match '%(field)s': %(values)s. "
+                "Choice lookup values must be unique within a custom field."
+            )
+            % {"field": self._unique_field, "values": values},
+            code="multiple_matches",
+        )
+
+    def _malformed(self, data: Any) -> NoReturn:
+        raise ValidationError(
+            _("Malformed custom choice %(value)r for '%(field)s'.")
+            % {"field": self._unique_field, "value": data},
+            code="invalid",
+        )
 
     def _normalize_choice(self, data: Any) -> Any:
         if isinstance(data, Mapping):
@@ -93,30 +106,21 @@ class ChoiceIdField(serializers.Field):
                 )
             data = data[self._unique_field]
 
-        model_field = get_custom_value_model()._meta.get_field(self._unique_field)
         boolean_fields = (models.BooleanField, models.JSONField)
-        if isinstance(data, bool) and not isinstance(model_field, boolean_fields):
-            raise ValidationError(
-                _("Malformed custom choice %(value)r for '%(field)s'.")
-                % {"field": self._unique_field, "value": data},
-                code="invalid",
-            )
+        if isinstance(data, bool) and not isinstance(self._model_field, boolean_fields):
+            self._malformed(data)
 
         try:
-            value = model_field.to_python(data)
-            model_field.get_prep_value(value)
-            if isinstance(model_field, models.JSONField):
+            value = self._model_field.to_python(data)
+            self._model_field.get_prep_value(value)
+            if isinstance(self._model_field, models.JSONField):
                 json.dumps(
                     value,
-                    cls=model_field.encoder or DjangoJSONEncoder,
+                    cls=self._model_field.encoder or DjangoJSONEncoder,
                     allow_nan=False,
                 )
         except (DjangoValidationError, OverflowError, TypeError, ValueError):
-            raise ValidationError(
-                _("Malformed custom choice %(value)r for '%(field)s'.")
-                % {"field": self._unique_field, "value": data},
-                code="invalid",
-            )
+            self._malformed(data)
         return value
 
     @staticmethod
@@ -143,9 +147,10 @@ class ChoiceIdField(serializers.Field):
         return (type(prepared), prepared)
 
     def _multiple_choice(self, data: list[Any]) -> list[AbstractBaseCustomValue]:
-        model_field = get_custom_value_model()._meta.get_field(self._unique_field)
         normalized = [self._normalize_choice(item) for item in data]
-        identities = [self._choice_identity(model_field, value) for value in normalized]
+        identities = [
+            self._choice_identity(self._model_field, value) for value in normalized
+        ]
 
         duplicate_indexes: list[int] = []
         seen: set[tuple[Any, ...]] = set()
@@ -165,7 +170,7 @@ class ChoiceIdField(serializers.Field):
             return []
 
         queryset = self.get_queryset()
-        if isinstance(model_field, models.JSONField):
+        if isinstance(self._model_field, models.JSONField):
             # JSON ``__in`` coerces mixed boolean/numeric values to one database
             # type on PostgreSQL. Exact OR lookups retain their JSON identities.
             lookup = Q()
@@ -177,8 +182,8 @@ class ChoiceIdField(serializers.Field):
         matches = list(queryset)
         matches_by_identity: dict[tuple[Any, ...], list[AbstractBaseCustomValue]] = {}
         for match in matches:
-            raw_value = model_field.value_from_object(match)
-            match_identity = self._choice_identity(model_field, raw_value)
+            raw_value = self._model_field.value_from_object(match)
+            match_identity = self._choice_identity(self._model_field, raw_value)
             matches_by_identity.setdefault(match_identity, []).append(match)
 
         ambiguous = [
@@ -187,14 +192,7 @@ class ChoiceIdField(serializers.Field):
             if len(matches_by_identity.get(identity, ())) > 1
         ]
         if ambiguous:
-            raise ValidationError(
-                _(
-                    "Multiple custom values match '%(field)s': %(values)s. "
-                    "Choice lookup values must be unique within a custom field."
-                )
-                % {"field": self._unique_field, "values": ambiguous},
-                code="multiple_matches",
-            )
+            self._ambiguous(ambiguous)
 
         missing = [
             value
