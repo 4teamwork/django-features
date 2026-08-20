@@ -237,6 +237,71 @@ class ChoiceNormalizationTest(APITestCase):
             {choice.id for choice in choices},
         )
 
+    def test_single_json_choice_lookup_distinguishes_integers_and_floats(
+        self,
+    ) -> None:
+        field = CustomFieldFactory(
+            identifier="single_numeric_json_choice",
+            choice_field=True,
+        )
+        integer_choice = CustomValueFactory(field=field, value=1)
+        float_choice = CustomValueFactory(field=field, value=1.0)
+        serializer_field = field.serializer_field
+        serializer_field.set_unique_field("value")
+
+        with self.assertNumQueries(1):
+            validated_integer = serializer_field.run_validation(1)
+        with self.assertNumQueries(1):
+            validated_float = serializer_field.run_validation(1.0)
+
+        self.assertEqual(validated_integer, integer_choice)
+        self.assertEqual(validated_float, float_choice)
+
+    def test_multiple_json_choice_lookup_distinguishes_integers_and_floats(
+        self,
+    ) -> None:
+        field = CustomFieldFactory(
+            identifier="multiple_numeric_json_choices",
+            choice_field=True,
+            multiple=True,
+        )
+        integer_choice = CustomValueFactory(field=field, value=1)
+        float_choice = CustomValueFactory(field=field, value=1.0)
+        serializer_field = field.serializer_field
+        serializer_field.set_unique_field("value")
+
+        with self.assertNumQueries(1):
+            validated = serializer_field.run_validation([1.0, 1])
+
+        self.assertEqual(validated, [float_choice, integer_choice])
+
+    def test_single_json_numeric_lookup_preserves_specific_error_codes(self) -> None:
+        missing_field = CustomFieldFactory(
+            identifier="missing_numeric_json_choice",
+            choice_field=True,
+        )
+        CustomValueFactory(field=missing_field, value=1.0)
+        missing_serializer_field = missing_field.serializer_field
+        missing_serializer_field.set_unique_field("value")
+
+        with self.assertNumQueries(1), self.assertRaises(ValidationError) as missing:
+            missing_serializer_field.run_validation(1)
+
+        ambiguous_field = CustomFieldFactory(
+            identifier="ambiguous_numeric_json_choice",
+            choice_field=True,
+        )
+        CustomValueFactory(field=ambiguous_field, value=1)
+        CustomValueFactory(field=ambiguous_field, value=1)
+        ambiguous_serializer_field = ambiguous_field.serializer_field
+        ambiguous_serializer_field.set_unique_field("value")
+
+        with self.assertNumQueries(1), self.assertRaises(ValidationError) as ambiguous:
+            ambiguous_serializer_field.run_validation(1)
+
+        self.assertEqual(missing.exception.get_codes(), ["does_not_exist"])
+        self.assertEqual(ambiguous.exception.get_codes(), ["multiple_matches"])
+
     def test_json_choice_lookup_still_rejects_exact_boolean_duplicates(self) -> None:
         field = CustomFieldFactory(
             identifier="duplicate_json_choices",

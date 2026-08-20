@@ -1,5 +1,6 @@
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 from typing import NoReturn
 
@@ -21,6 +22,12 @@ from django_features.custom_fields.models.value import CustomValueQuerySet
 from django_features.custom_fields.serializers import CustomChoiceSerializer
 
 
+@dataclass(frozen=True)
+class ChoiceLookupMetadata:
+    field_name: str
+    model_field: models.Field
+
+
 class ChoiceIdField(serializers.Field):
     _unique_field: str | None = None
     _model_field: models.Field
@@ -37,21 +44,56 @@ class ChoiceIdField(serializers.Field):
         super().__init__(**kwargs)
         self.field = field
         self.required = kwargs.get("required", self.field.required)
+        self._valid_lookup_fields = get_field_info(
+            get_custom_value_model()
+        ).fields_and_pk
         self.set_unique_field(unique_field)
 
-    def set_unique_field(self, unique_field: str | None) -> None:
-        self._unique_field = unique_field or "id"
-
-        valid_fields = get_field_info(get_custom_value_model()).fields_and_pk
-        if self._unique_field not in valid_fields:
+    def _get_lookup_metadata(
+        self,
+        unique_field: str | None,
+    ) -> ChoiceLookupMetadata:
+        field_name = unique_field or "id"
+        if field_name not in self._valid_lookup_fields:
             raise ValueError(
-                f"The unique_field must be a valid field of {valid_fields}: "
-                f"invalid field {self._unique_field}"
+                "The unique_field must be a valid field of "
+                f"{self._valid_lookup_fields}: invalid field {field_name}"
             )
-        self._model_field = valid_fields[self._unique_field]
+        return ChoiceLookupMetadata(
+            field_name=field_name,
+            model_field=self._valid_lookup_fields[field_name],
+        )
+
+    def set_unique_field(self, unique_field: str | None) -> None:
+        lookup = self._get_lookup_metadata(unique_field)
+        self._request_lookup = lookup
+        # Keep these public implementation attributes for compatibility with
+        # serializers which configure or inspect the request lookup.
+        self._unique_field = lookup.field_name
+        self._model_field = lookup.model_field
 
     def get_queryset(self) -> CustomValueQuerySet:
         return get_custom_value_model().objects.filter(field_id=self.field.id)
+
+    def run_default_validation(
+        self, data: Any
+    ) -> AbstractBaseCustomValue | list[AbstractBaseCustomValue]:
+        """Validate configured defaults as canonical custom-value primary keys.
+
+        Request payloads continue to use the lookup selected by the serializer,
+        such as ``value`` for mapping serializers.  Defaults are stored in the
+        custom-field definition itself, so they must have one stable format
+        independent of the serializer which happens to apply them.
+        """
+        is_empty, value = self.validate_empty_values(data)
+        if is_empty:
+            return value
+        validated = self._to_internal_value(
+            value,
+            lookup=self._get_lookup_metadata("pk"),
+        )
+        self.run_validators(validated)
+        return validated
 
     def to_representation(
         self,
@@ -63,64 +105,109 @@ class ChoiceIdField(serializers.Field):
     ) -> dict[str, Any] | list[dict[str, Any]]:
         return CustomChoiceSerializer(value, many=self.field.multiple).data
 
-    def _choice_field(self, data: Any) -> AbstractBaseCustomValue:
-        value = self._normalize_choice(data)
+    def _choice_field(
+        self,
+        data: Any,
+        *,
+        lookup: ChoiceLookupMetadata | None = None,
+    ) -> AbstractBaseCustomValue:
+        lookup = lookup or self._request_lookup
+        value = self._normalize_choice(data, lookup=lookup)
         try:
-            return self.get_queryset().get(**{self._unique_field: value})
+            if isinstance(lookup.model_field, models.JSONField):
+                identity = self._choice_identity(lookup.model_field, value)
+                matches = [
+                    match
+                    for match in self.get_queryset().filter(
+                        **{lookup.field_name: value}
+                    )
+                    if self._choice_identity(
+                        lookup.model_field,
+                        lookup.model_field.value_from_object(match),
+                    )
+                    == identity
+                ]
+                if len(matches) > 1:
+                    self._ambiguous([value], lookup=lookup)
+                if matches:
+                    return matches[0]
+                raise ObjectDoesNotExist
+            return self.get_queryset().get(**{lookup.field_name: value})
         except MultipleObjectsReturned:
-            self._ambiguous([value])
+            self._ambiguous([value], lookup=lookup)
         except (ObjectDoesNotExist, OverflowError, TypeError, ValueError):
             raise ValidationError(
                 _("Custom value with the %(field)s %(value)s does not exist.")
-                % {"field": self._unique_field, "value": value},
+                % {"field": lookup.field_name, "value": value},
                 code="does_not_exist",
             )
 
-    def _ambiguous(self, values: list[Any]) -> NoReturn:
+    def _ambiguous(
+        self,
+        values: list[Any],
+        *,
+        lookup: ChoiceLookupMetadata | None = None,
+    ) -> NoReturn:
+        lookup = lookup or self._request_lookup
         raise ValidationError(
             _(
                 "Multiple custom values match '%(field)s': %(values)s. "
                 "Choice lookup values must be unique within a custom field."
             )
-            % {"field": self._unique_field, "values": values},
+            % {"field": lookup.field_name, "values": values},
             code="multiple_matches",
         )
 
-    def _malformed(self, data: Any) -> NoReturn:
+    def _malformed(
+        self,
+        data: Any,
+        *,
+        lookup: ChoiceLookupMetadata | None = None,
+    ) -> NoReturn:
+        lookup = lookup or self._request_lookup
         raise ValidationError(
             _("Malformed custom choice %(value)r for '%(field)s'.")
-            % {"field": self._unique_field, "value": data},
+            % {"field": lookup.field_name, "value": data},
             code="invalid",
         )
 
-    def _normalize_choice(self, data: Any) -> Any:
+    def _normalize_choice(
+        self,
+        data: Any,
+        *,
+        lookup: ChoiceLookupMetadata | None = None,
+    ) -> Any:
+        lookup = lookup or self._request_lookup
         if isinstance(data, Mapping):
-            if self._unique_field not in data:
+            if lookup.field_name not in data:
                 raise ValidationError(
                     _(
                         "Malformed custom choice. Expected a value or object "
                         "containing '%(field)s'."
                     )
-                    % {"field": self._unique_field},
+                    % {"field": lookup.field_name},
                     code="invalid",
                 )
-            data = data[self._unique_field]
+            data = data[lookup.field_name]
 
         boolean_fields = (models.BooleanField, models.JSONField)
-        if isinstance(data, bool) and not isinstance(self._model_field, boolean_fields):
-            self._malformed(data)
+        if isinstance(data, bool) and not isinstance(
+            lookup.model_field,
+            boolean_fields,
+        ):
+            self._malformed(data, lookup=lookup)
 
         try:
-            value = self._model_field.to_python(data)
-            self._model_field.get_prep_value(value)
-            if isinstance(self._model_field, models.JSONField):
+            value = lookup.model_field.to_python(data)
+            lookup.model_field.get_prep_value(value)
+            if isinstance(lookup.model_field, models.JSONField):
                 json.dumps(
                     value,
-                    cls=self._model_field.encoder or DjangoJSONEncoder,
+                    cls=lookup.model_field.encoder or DjangoJSONEncoder,
                     allow_nan=False,
                 )
         except (DjangoValidationError, OverflowError, TypeError, ValueError):
-            self._malformed(data)
+            self._malformed(data, lookup=lookup)
         return value
 
     @staticmethod
@@ -146,10 +233,16 @@ class ChoiceIdField(serializers.Field):
             return (type(prepared), repr(prepared))
         return (type(prepared), prepared)
 
-    def _multiple_choice(self, data: list[Any]) -> list[AbstractBaseCustomValue]:
-        normalized = [self._normalize_choice(item) for item in data]
+    def _multiple_choice(
+        self,
+        data: list[Any],
+        *,
+        lookup: ChoiceLookupMetadata | None = None,
+    ) -> list[AbstractBaseCustomValue]:
+        lookup = lookup or self._request_lookup
+        normalized = [self._normalize_choice(item, lookup=lookup) for item in data]
         identities = [
-            self._choice_identity(self._model_field, value) for value in normalized
+            self._choice_identity(lookup.model_field, value) for value in normalized
         ]
 
         duplicate_indexes: list[int] = []
@@ -170,20 +263,20 @@ class ChoiceIdField(serializers.Field):
             return []
 
         queryset = self.get_queryset()
-        if isinstance(self._model_field, models.JSONField):
+        if isinstance(lookup.model_field, models.JSONField):
             # JSON ``__in`` coerces mixed boolean/numeric values to one database
             # type on PostgreSQL. Exact OR lookups retain their JSON identities.
-            lookup = Q()
+            query = Q()
             for value in normalized:
-                lookup |= Q(**{self._unique_field: value})
-            queryset = queryset.filter(lookup)
+                query |= Q(**{lookup.field_name: value})
+            queryset = queryset.filter(query)
         else:
-            queryset = queryset.filter(**{f"{self._unique_field}__in": normalized})
+            queryset = queryset.filter(**{f"{lookup.field_name}__in": normalized})
         matches = list(queryset)
         matches_by_identity: dict[tuple[Any, ...], list[AbstractBaseCustomValue]] = {}
         for match in matches:
-            raw_value = self._model_field.value_from_object(match)
-            match_identity = self._choice_identity(self._model_field, raw_value)
+            raw_value = lookup.model_field.value_from_object(match)
+            match_identity = self._choice_identity(lookup.model_field, raw_value)
             matches_by_identity.setdefault(match_identity, []).append(match)
 
         ambiguous = [
@@ -192,7 +285,7 @@ class ChoiceIdField(serializers.Field):
             if len(matches_by_identity.get(identity, ())) > 1
         ]
         if ambiguous:
-            self._ambiguous(ambiguous)
+            self._ambiguous(ambiguous, lookup=lookup)
 
         missing = [
             value
@@ -202,13 +295,16 @@ class ChoiceIdField(serializers.Field):
         if missing:
             raise ValidationError(
                 _("Some custom choices do not exist for '%(field)s': %(values)s")
-                % {"field": self._unique_field, "values": missing},
+                % {"field": lookup.field_name, "values": missing},
                 code="does_not_exist",
             )
         return [matches_by_identity[identity][0] for identity in identities]
 
-    def to_internal_value(
-        self, data: Any
+    def _to_internal_value(
+        self,
+        data: Any,
+        *,
+        lookup: ChoiceLookupMetadata,
     ) -> AbstractBaseCustomValue | list[AbstractBaseCustomValue]:
         if not self.field.choice_field:
             raise ValidationError(
@@ -224,5 +320,10 @@ class ChoiceIdField(serializers.Field):
                 )
             if not data and not self.field.allow_blank:
                 raise ValidationError(self.error_messages["empty"], code="empty")
-            return self._multiple_choice(data)
-        return self._choice_field(data)
+            return self._multiple_choice(data, lookup=lookup)
+        return self._choice_field(data, lookup=lookup)
+
+    def to_internal_value(
+        self, data: Any
+    ) -> AbstractBaseCustomValue | list[AbstractBaseCustomValue]:
+        return self._to_internal_value(data, lookup=self._request_lookup)

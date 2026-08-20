@@ -2,6 +2,8 @@ import copy
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
+from typing import Protocol
+from typing import runtime_checkable
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -15,15 +17,29 @@ from rest_framework import serializers
 from django_features.custom_fields.models.value import CustomValueQuerySet
 
 
+@runtime_checkable
+class CanonicalChoiceDefaultField(Protocol):
+    def run_default_validation(self, data: Any) -> Any:
+        raise NotImplementedError
+
+
 @dataclass(frozen=True)
 class ValidatedCustomFieldDefault:
     """Validate a configured default only when DRF applies it to input."""
 
     value: Any
+    choice_by_pk: bool = False
     requires_context: ClassVar[bool] = True
 
     def __call__(self, serializer_field: serializers.Field) -> Any:
-        return serializer_field.run_validation(copy.deepcopy(self.value))
+        value = copy.deepcopy(self.value)
+        if not self.choice_by_pk:
+            return serializer_field.run_validation(value)
+        if not isinstance(serializer_field, CanonicalChoiceDefaultField):
+            raise TypeError(
+                "A custom-choice default requires canonical default validation."
+            )
+        return serializer_field.run_default_validation(value)
 
 
 class CustomFieldQuerySet(models.QuerySet):
@@ -192,12 +208,19 @@ class AbstractBaseCustomField(TimeStampedModel):
         )
 
     @property
+    def validated_serializer_default(self) -> ValidatedCustomFieldDefault:
+        return ValidatedCustomFieldDefault(
+            self.default,
+            choice_by_pk=self.choice_field,
+        )
+
+    @property
     def serializer_field(self) -> serializers.Field:
         from django_features.custom_fields.fields import ChoiceIdField
 
         field_params = {"allow_null": self.allow_null, "required": self.required}
         if self.default is not None and not self.required:
-            field_params["default"] = ValidatedCustomFieldDefault(self.default)
+            field_params["default"] = self.validated_serializer_default
         if self.choice_field:
             field: serializers.Field = ChoiceIdField(field=self, **field_params)
         else:

@@ -20,7 +20,6 @@ from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models.base import CustomFieldBaseModel
 from django_features.custom_fields.models.field import AbstractBaseCustomField
 from django_features.custom_fields.models.field import CustomFieldQuerySet
-from django_features.custom_fields.models.field import ValidatedCustomFieldDefault
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
 from django_features.custom_fields.models.value import CustomValueQuerySet
 
@@ -515,9 +514,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 # definition itself is marked as required.
                 serialized_field.required = False
                 if field.default is not None:
-                    serialized_field.default = ValidatedCustomFieldDefault(
-                        field.default
-                    )
+                    serialized_field.default = field.validated_serializer_default
             if isinstance(self.instance, self.model):
                 # Custom-field defaults are create-only. Both full and partial
                 # updates preserve every omitted custom value.
