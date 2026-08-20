@@ -16,7 +16,8 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.13
+          # The lock resolves Django 4.2, whose supported Python ceiling is 3.12.
+          python-version: 3.12
       - name: Install poetry
         uses: abatilo/actions-poetry@v2
         with:
@@ -31,21 +32,27 @@ jobs:
         run: poetry run black --check --config pyproject.toml .
       - name: mypy
         run: poetry run mypy django_features app
+      - name: Verify packaged translations
+        run: poetry run python bin/verify_i18n_artifact.py
 
   test:
     runs-on: self-hosted
     strategy:
       max-parallel: 1
       matrix:
-        django:
-          - "~=4.2.0"
-          - "~=5.2.0"
+        include:
+          - python: "3.12"
+            django: "~=4.2.0"
+            database: django_features_testing_py312_django42
+          - python: "3.13"
+            django: "~=5.2.0"
+            database: django_features_testing_py313_django52
     services:
       postgres:
         image: postgres
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: django_features_testing
+          POSTGRES_DB: ${{ matrix.database }}
         ports:
           - 5432:5432
         options: >-
@@ -59,7 +66,7 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.13
+          python-version: ${{ matrix.python }}
       - name: Install poetry
         uses: abatilo/actions-poetry@v2
         with:
@@ -67,8 +74,13 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install
-          # Intentionally bypass the lock for latest-patch Django smoke testing.
-          poetry run pip install --upgrade "Django${{ matrix.django }}"
+          # Intentionally bypass the lock for latest-patch compatibility testing.
+          poetry run pip install --upgrade \
+            "Django${{ matrix.django }}" \
+            "djangorestframework>3.17,<3.18"
           poetry run pip check
       - name: test
-        run: DJANGO_CONFIGURATION=Testing poetry run pytest
+        env:
+          DJANGO_CONFIGURATION: Testing
+          DJANGO_DATABASE_NAME: ${{ matrix.database }}
+        run: poetry run pytest

@@ -46,51 +46,51 @@ msgstr "English"
 
 #: app/settings/base.py
 msgid "Französisch"
-msgstr "France"
+msgstr "French"
 
 #: django_features/custom_fields/fields.py
 msgid "This list may not be empty."
-msgstr ""
+msgstr "This list may not be empty."
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Multiple custom values match '%(field)s': %(values)s. Choice lookup values must be unique within a custom field."
-msgstr ""
+msgstr "Multiple custom values match '%(field)s': %(values)s. Choice lookup values must be unique within a custom field."
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Custom value with the %(field)s %(value)s does not exist."
-msgstr ""
+msgstr "Custom value with the %(field)s %(value)s does not exist."
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Malformed custom choice. Expected a value or object containing '%(field)s'."
-msgstr ""
+msgstr "Malformed custom choice. Expected a value or object containing '%(field)s'."
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Malformed custom choice %(value)r for '%(field)s'."
-msgstr ""
+msgstr "Malformed custom choice %(value)r for '%(field)s'."
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Duplicate custom choice values are not allowed: %(values)s"
-msgstr ""
+msgstr "Duplicate custom choice values are not allowed: %(values)s"
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Some custom choices do not exist for '%(field)s': %(values)s"
-msgstr ""
+msgstr "Some custom choices do not exist for '%(field)s': %(values)s"
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "The field %(field)s is not a choice field."
-msgstr ""
+msgstr "The field %(field)s is not a choice field."
 
 #: django_features/custom_fields/fields.py
 #, python-format
 msgid "Expected a list of custom choices, but got %(value)r."
-msgstr ""
+msgstr "Expected a list of custom choices, but got %(value)r."
 
 #: django_features/custom_fields/models/field.py
 msgid "Text (einzeilig)"
@@ -150,7 +150,7 @@ msgstr "Hide"
 
 #: django_features/custom_fields/models/field.py
 msgid "Als Filter anbieten"
-msgstr ""
+msgstr "Offer as filter"
 
 #: django_features/custom_fields/models/field.py
 #: django_features/system_message/models.py
@@ -173,7 +173,7 @@ msgstr "Required"
 
 #: django_features/custom_fields/models/value.py
 msgid "Label"
-msgstr ""
+msgstr "Label"
 
 #: django_features/custom_fields/models/value.py
 msgid "Wert"
@@ -181,27 +181,27 @@ msgstr "Value"
 
 #: django_features/custom_fields/serializers.py
 msgid "This custom field does not belong to the selected type."
-msgstr ""
+msgstr "This custom field does not belong to the selected type."
 
 #: django_features/custom_fields/serializers.py
 msgid "This custom field may not be changed manually."
-msgstr ""
+msgstr "This custom field may not be changed manually."
 
 #: django_features/custom_fields/serializers.py
 msgid "The validated type does not match the submitted custom field type."
-msgstr ""
+msgstr "The validated type does not match the submitted custom field type."
 
 #: django_features/custom_fields/serializers.py
 msgid "The selected custom field type does not exist."
-msgstr ""
+msgstr "The selected custom field type does not exist."
 
 #: django_features/fields.py
 msgid "Objekt existiert nicht."
-msgstr ""
+msgstr "Object does not exist."
 
 #: django_features/fields.py
 msgid "Inkorrekter Typ."
-msgstr ""
+msgstr "Incorrect type."
 
 #: django_features/system_message/models.py
 msgid "Icon"
