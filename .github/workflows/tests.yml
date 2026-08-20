@@ -8,6 +8,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
+      - name: Install poetry
+        uses: abatilo/actions-poetry@v2
+        with:
+          poetry-version: 2.1
+      - name: Install dependencies
+        run: poetry install
+      - name: isort
+        run: poetry run isort --check-only --quiet --settings pyproject.toml .
+      - name: flake8
+        run: poetry run flake8
+      - name: black
+        run: poetry run black --check --config pyproject.toml .
+      - name: mypy
+        run: poetry run mypy django_features app
+
   test:
     runs-on: self-hosted
     strategy:
@@ -43,14 +67,8 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install
-          poetry run pip install "Django${{ matrix.django }}"
-      - name: isort
-        run: poetry run isort --check-only --quiet --settings pyproject.toml .
-      - name: flake8
-        run: poetry run flake8
-      - name: black
-        run: poetry run black --check --config pyproject.toml .
-      - name: mypy
-        run: poetry run mypy django_features app
+          # Intentionally bypass the lock for latest-patch Django smoke testing.
+          poetry run pip install --upgrade "Django${{ matrix.django }}"
+          poetry run pip check
       - name: test
         run: DJANGO_CONFIGURATION=Testing poetry run pytest
