@@ -8,6 +8,7 @@ from typing import NamedTuple
 
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
@@ -117,6 +118,19 @@ class CustomFieldTypeResolution:
     @property
     def failed(self) -> bool:
         return self.selection is not None and not self.selection.resolved
+
+
+@dataclass(frozen=True)
+class _CustomFieldTypeValidationReplay:
+    """Replay one selector conversion/default outcome during normal validation."""
+
+    value: Any = empty
+    exception: Exception | None = None
+
+    def __call__(self, value: Any = empty) -> Any:
+        if self.exception is not None:
+            raise self.exception.with_traceback(None)
+        return self.value
 
 
 class _UnresolvedCustomFieldType:
@@ -331,6 +345,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self._custom_field_type_resolution: (
             CustomFieldTypeResolution | _UnresolvedCustomFieldType
         ) = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._custom_field_type_preview_depth = 0
         self._static_serializer_fields: dict[str, serializers.Field] | None = None
         self._custom_fields = []
         self._all_custom_field_identifiers: set[str] = set()
@@ -483,7 +498,15 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         )
 
     def get_fields(self) -> dict[str, Any]:
-        fields = dict(self._get_static_fields())
+        static_fields = self._get_static_fields()
+        if self._custom_field_type_preview_depth:
+            # A selector's default/conversion may inspect ``parent.fields``. The
+            # selected type is not known yet, so expose independent static field
+            # copies and let serializer subclasses (for example mapping serializers)
+            # apply their normal field transformation without recursing here.
+            return copy.deepcopy(static_fields)
+
+        fields = dict(static_fields)
         self.validate_custom_field_identifiers(fields)
         if self.exclude_custom_fields:
             return fields
@@ -632,20 +655,72 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self,
         input_field: str,
         serializer_field: serializers.Field,
-        value: Any,
+        initial_data: Mapping[str, Any],
     ) -> Any:
-        """Convert a type selector without running its validators.
+        """Convert a type selector once and replay it during DRF validation.
 
         Dynamic fields must be known before DRF validates the complete payload. A
-        bound copy provides the normal field context for conversion while leaving
-        the real field untouched for the subsequent validation pass.
+        bound copy provides the normal field context without binding the real field
+        before ``get_fields()`` returns it. The resulting default or conversion is
+        installed only on that real field instance, so normal field validators and
+        ``validate_<field>()`` hooks still run once in DRF's regular validation pass.
         """
         preview_field = copy.deepcopy(serializer_field)
+        # DRF deep-copies callable field defaults. Invoke the actual per-serializer
+        # callable so stateful and context-aware defaults retain normal semantics.
+        preview_field.default = serializer_field.default
         preview_field.bind(field_name=input_field, parent=self)
-        is_empty, converted = preview_field.validate_empty_values(value)
-        if not is_empty:
-            converted = preview_field.to_internal_value(value)
-        return converted
+        fields_were_cached = "fields" in self.__dict__
+        cached_fields = self.__dict__.get("fields")
+        self._custom_field_type_preview_depth += 1
+        try:
+            primitive_value = preview_field.get_value(initial_data)
+            if (
+                isinstance(preview_field, serializers.RelatedField)
+                and primitive_value == ""
+            ):
+                # RelatedField.run_validation() performs this normalization before
+                # the base Field lifecycle. Mirror it here so the preview selects
+                # the same fields as normal DRF validation for nullable HTML/form
+                # input.
+                primitive_value = None
+
+            conversion_attempted = False
+            try:
+                is_empty, converted = preview_field.validate_empty_values(
+                    primitive_value
+                )
+                if not is_empty:
+                    conversion_attempted = True
+                    converted = preview_field.to_internal_value(converted)
+                replay = _CustomFieldTypeValidationReplay(value=converted)
+            except (
+                SkipField,
+                serializers.ValidationError,
+                DjangoValidationError,
+            ) as exc:
+                replay = _CustomFieldTypeValidationReplay(
+                    exception=exc.with_traceback(None)
+                )
+                if primitive_value is empty and serializer_field.default is not empty:
+                    serializer_field.default = replay
+                elif conversion_attempted:
+                    setattr(serializer_field, "to_internal_value", replay)
+                raise
+
+            if primitive_value is empty and serializer_field.default is not empty:
+                serializer_field.default = replay
+            elif conversion_attempted:
+                setattr(serializer_field, "to_internal_value", replay)
+            return converted
+        finally:
+            self._custom_field_type_preview_depth -= 1
+            if fields_were_cached:
+                self.__dict__["fields"] = cached_fields
+            else:
+                # A recursive ``parent.fields`` access caches the provisional static
+                # view. Discard it so the outer/later access builds the complete set.
+                self.__dict__.pop("fields", None)
 
     @staticmethod
     def _normalize_custom_field_type_id(value: Any) -> int | None:
@@ -684,16 +759,15 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             return None
 
         submitted = config.input_field in initial_data
-        value = initial_data[config.input_field] if submitted else empty
         try:
             converted = self._preview_custom_field_type_value(
                 config.input_field,
                 serializer_field,
-                value,
+                initial_data,
             )
         except SkipField:
             return None
-        except serializers.ValidationError:
+        except (serializers.ValidationError, DjangoValidationError):
             return self._resolution_with_selection(
                 config=config,
                 type_id=None,

@@ -179,7 +179,7 @@ class CustomFieldSerializerStructureTest(APITestCase):
         self.assertEqual(CountingPrimaryKeyRelatedField.conversion_calls, 1)
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(CountingPrimaryKeyRelatedField.conversion_calls, 2)
+        self.assertEqual(CountingPrimaryKeyRelatedField.conversion_calls, 1)
 
     def test_many_items_resolve_fields_and_representation_independently(self) -> None:
         serializer = TypeAwarePersonSerializer(data=self.type_aware_data(), many=True)

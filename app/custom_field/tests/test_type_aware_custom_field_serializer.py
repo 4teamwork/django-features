@@ -219,7 +219,11 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
             }
         )
 
-        self.assertFalse(serializer.is_valid())
+        self.assertNotIn("first_value", serializer.fields)
+        with self.assertNumQueries(0):
+            is_valid = serializer.is_valid()
+
+        self.assertFalse(is_valid)
         self.assertEqual(serializer.errors["person_type"][0].code, "does_not_exist")
         self.assertNotIn("first_value", serializer.errors)
 
@@ -440,10 +444,15 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
 
     def test_type_selector_default_is_used_on_create(self) -> None:
         default_type = self.first_type
+        calls: list[PersonType] = []
+
+        def get_default_type() -> PersonType:
+            calls.append(default_type)
+            return default_type
 
         class DefaultTypePersonSerializer(TypeAwarePersonSerializer):
             person_type = serializers.PrimaryKeyRelatedField(
-                default=default_type,
+                default=get_default_type,
                 queryset=PersonType.objects.all(),
                 required=False,
             )
@@ -457,15 +466,29 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
 
         self.assertEqual(person.person_type, self.first_type)
         self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
+        self.assertEqual(calls, [self.first_type])
 
     def test_hidden_type_selector_default_is_used_on_create(self) -> None:
         default_type = self.first_type
+        calls: list[tuple[PersonType, str]] = []
+
+        def get_default_type(serializer_field: serializers.Field) -> PersonType:
+            selected_type = serializer_field.context["default_type"]
+            calls.append((selected_type, serializer_field.field_name))
+            return selected_type
+
+        setattr(get_default_type, "requires_context", True)
 
         class HiddenDefaultTypePersonSerializer(TypeAwarePersonSerializer):
-            person_type = serializers.HiddenField(default=default_type)
+            person_type = serializers.HiddenField(default=get_default_type)
 
         serializer = HiddenDefaultTypePersonSerializer(
-            data={"firstname": "Hidden default", "first_value": "typed"}
+            data={
+                "firstname": "Hidden default",
+                "person_type": self.second_type.pk,
+                "first_value": "typed",
+            },
+            context={"default_type": default_type},
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -473,13 +496,51 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
 
         self.assertEqual(person.person_type, self.first_type)
         self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
+        self.assertEqual(calls, [(self.first_type, "person_type")])
+
+    def test_context_type_selector_default_can_read_static_parent_fields(self) -> None:
+        calls: list[set[str]] = []
+
+        def get_default_type(serializer_field: serializers.Field) -> PersonType:
+            calls.append(set(serializer_field.parent.fields))
+            return self.first_type
+
+        setattr(get_default_type, "requires_context", True)
+
+        class ParentFieldsDefaultTypePersonSerializer(TypeAwarePersonSerializer):
+            person_type = serializers.PrimaryKeyRelatedField(
+                default=get_default_type,
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        serializer = ParentFieldsDefaultTypePersonSerializer(
+            data={"firstname": "Static siblings", "first_value": "typed"}
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(
+            calls,
+            [{"email", "firstname", "lastname", "person_type"}],
+        )
+        self.assertIs(serializer.fields["firstname"].parent, serializer)
+        self.assertIn("first_value", serializer.fields)
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
 
     def test_type_selector_default_is_used_on_full_update(self) -> None:
         default_type = self.second_type
+        calls: list[PersonType] = []
+
+        def get_default_type() -> PersonType:
+            calls.append(default_type)
+            return default_type
 
         class DefaultTypePersonSerializer(TypeAwarePersonSerializer):
             person_type = serializers.PrimaryKeyRelatedField(
-                default=default_type,
+                default=get_default_type,
                 queryset=PersonType.objects.all(),
                 required=False,
             )
@@ -495,13 +556,19 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
 
         self.assertEqual(person.person_type, self.second_type)
         self.assertTrue(person.custom_values.filter(field=self.second_field).exists())
+        self.assertEqual(calls, [self.second_type])
 
     def test_type_selector_default_is_skipped_on_partial_update(self) -> None:
         default_type = self.second_type
+        calls: list[PersonType] = []
+
+        def get_default_type() -> PersonType:
+            calls.append(default_type)
+            return default_type
 
         class DefaultTypePersonSerializer(TypeAwarePersonSerializer):
             person_type = serializers.PrimaryKeyRelatedField(
-                default=default_type,
+                default=get_default_type,
                 queryset=PersonType.objects.all(),
                 required=False,
             )
@@ -516,6 +583,171 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         person = serializer.save()
 
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
+        self.assertEqual(calls, [])
+
+    def test_create_only_type_selector_default_runs_once_only_on_create(self) -> None:
+        default_type = self.first_type
+        calls: list[PersonType] = []
+
+        def get_default_type() -> PersonType:
+            calls.append(default_type)
+            return default_type
+
+        class CreateOnlyDefaultTypePersonSerializer(TypeAwarePersonSerializer):
+            person_type = serializers.PrimaryKeyRelatedField(
+                default=serializers.CreateOnlyDefault(get_default_type),
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        create = CreateOnlyDefaultTypePersonSerializer(
+            data={"firstname": "Create only", "first_value": "created"}
+        )
+
+        self.assertTrue(create.is_valid(), create.errors)
+        person = create.save()
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertEqual(calls, [self.first_type])
+
+        calls.clear()
+        update = CreateOnlyDefaultTypePersonSerializer(
+            person,
+            data={"firstname": "Updated", "first_value": "updated"},
+        )
+
+        self.assertTrue(update.is_valid(), update.errors)
+        person = update.save()
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertEqual(calls, [])
+
+    def test_type_selector_default_error_runs_once_and_preserves_code(self) -> None:
+        calls: list[set[str]] = []
+
+        def invalid_default(serializer_field: serializers.Field) -> PersonType:
+            calls.append(set(serializer_field.parent.fields))
+            raise serializers.ValidationError("Unavailable type", code="unavailable")
+
+        setattr(invalid_default, "requires_context", True)
+
+        class InvalidDefaultTypePersonSerializer(TypeAwarePersonSerializer):
+            person_type = serializers.PrimaryKeyRelatedField(
+                default=invalid_default,
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        serializer = InvalidDefaultTypePersonSerializer(
+            data={"firstname": "Invalid default"}
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(serializer.errors["person_type"][0].code, "unavailable")
+        self.assertEqual(
+            calls,
+            [{"email", "firstname", "lastname", "person_type"}],
+        )
+        self.assertIs(serializer.fields["firstname"].parent, serializer)
+
+    def test_nullable_related_type_selector_normalizes_empty_string_to_none(
+        self,
+    ) -> None:
+        serializer = TypeAwarePersonSerializer(
+            data={
+                "firstname": "No type",
+                "person_type": "",
+                "default_value": "global",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("first_value", serializer.fields)
+        self.assertNotIn("second_value", serializer.fields)
+        person = serializer.save()
+
+        self.assertIsNone(person.person_type)
+        self.assertTrue(person.custom_values.filter(field=self.default_field).exists())
+
+    def test_many_callable_type_defaults_run_once_and_are_item_scoped(self) -> None:
+        default_types = iter((self.first_type, self.second_type))
+        calls: list[PersonType] = []
+
+        def get_default_type() -> PersonType:
+            default_type = next(default_types)
+            calls.append(default_type)
+            return default_type
+
+        class DefaultTypePersonSerializer(TypeAwarePersonSerializer):
+            person_type = serializers.PrimaryKeyRelatedField(
+                default=get_default_type,
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        serializer = DefaultTypePersonSerializer(
+            data=[
+                {"firstname": "First", "first_value": "first"},
+                {"firstname": "Second", "second_value": "second"},
+            ],
+            many=True,
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        first, second = serializer.save()
+
+        self.assertEqual(calls, [self.first_type, self.second_type])
+        self.assertEqual(first.person_type, self.first_type)
+        self.assertEqual(second.person_type, self.second_type)
+        self.assertTrue(first.custom_values.filter(field=self.first_field).exists())
+        self.assertTrue(second.custom_values.filter(field=self.second_field).exists())
+
+    def test_explicit_related_type_selector_conversion_is_replayed(self) -> None:
+        serializer = TypeAwarePersonSerializer(
+            data={
+                "firstname": "One lookup",
+                "person_type": self.first_type.pk,
+                "first_value": "typed",
+            }
+        )
+
+        # Field construction performs the one related-object lookup needed to
+        # select dynamic fields. Normal validation replays that conversion.
+        self.assertIn("first_value", serializer.fields)
+        with self.assertNumQueries(0):
+            is_valid = serializer.is_valid()
+
+        self.assertTrue(is_valid, serializer.errors)
+
+    def test_type_selector_conversion_can_read_static_parent_fields(self) -> None:
+        calls: list[set[str]] = []
+
+        class ParentFieldsPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
+            def to_internal_value(self, data: Any) -> PersonType:
+                calls.append(set(self.parent.fields))
+                return super().to_internal_value(data)
+
+        class ParentFieldsTypePersonSerializer(TypeAwarePersonSerializer):
+            person_type = ParentFieldsPrimaryKeyRelatedField(
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        serializer = ParentFieldsTypePersonSerializer(
+            data={
+                "firstname": "Conversion siblings",
+                "person_type": self.first_type.pk,
+                "first_value": "typed",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(
+            calls,
+            [{"email", "firstname", "lastname", "person_type"}],
+        )
         self.assertEqual(person.person_type, self.first_type)
         self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
 
@@ -577,6 +809,27 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
             data = TypeAwarePersonSerializer(people, many=True).data
 
         self.assertEqual(len(data), len(people))
+
+    def test_many_serialization_queries_scale_with_distinct_types(self) -> None:
+        people = [
+            PersonFactory(
+                person_type=self.first_type if index % 2 == 0 else self.second_type
+            )
+            for index in range(20)
+        ]
+        for person in people:
+            person.refresh_with_custom_fields()
+
+        # One identifier query plus one definition query for each distinct type.
+        with self.assertNumQueries(3):
+            data = TypeAwarePersonSerializer(people, many=True).data
+
+        self.assertEqual(len(data), len(people))
+        for index, item in enumerate(data):
+            expected = "first_value" if index % 2 == 0 else "second_value"
+            unexpected = "second_value" if index % 2 == 0 else "first_value"
+            self.assertIn(expected, item)
+            self.assertNotIn(unexpected, item)
 
     def test_many_serialization_does_not_resolve_choice_defaults(self) -> None:
         single = CustomFieldFactory(
@@ -661,6 +914,36 @@ class TypeAwareCustomFieldSerializerTest(APITestCase):
                 value="first",
             ).exists()
         )
+
+    def test_mapping_context_type_default_reads_mapped_static_fields(self) -> None:
+        calls: list[set[str]] = []
+
+        def get_default_type(serializer_field: serializers.Field) -> PersonType:
+            calls.append(set(serializer_field.parent.fields))
+            return self.first_type
+
+        setattr(get_default_type, "requires_context", True)
+
+        class ParentFieldsDefaultMappingSerializer(TypeAwarePersonMappingSerializer):
+            person_type = serializers.PrimaryKeyRelatedField(
+                default=get_default_type,
+                queryset=PersonType.objects.all(),
+                required=False,
+            )
+
+        serializer = ParentFieldsDefaultMappingSerializer(
+            data={
+                "external_firstname": "Mapped default",
+                "external_first": "typed",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        person = serializer.save()
+
+        self.assertEqual(calls, [{"firstname", "person_type"}])
+        self.assertEqual(person.person_type, self.first_type)
+        self.assertTrue(person.custom_values.filter(field=self.first_field).exists())
 
     def test_many_mapping_create_uses_each_submitted_type(self) -> None:
         data = [
