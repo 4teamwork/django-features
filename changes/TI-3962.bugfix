@@ -23,11 +23,25 @@ full and partial updates preserve all omitted custom values. Custom-field defaul
 are create-only. Mapping serializers which exclude custom fields ignore mapped
 custom values while continuing to process normal model fields.
 
-Multiple-choice validation now materializes its validated choices and compares
-JSON lookup values with type-sensitive identities, so values such as ``true`` and
-``1`` remain distinct.
+Choice validation now materializes its validated choices and compares JSON lookup
+values with type-sensitive identities, so values such as ``true`` and ``1`` or
+``1`` and ``1.0`` remain distinct for both single and multiple choices.
 
 Custom-field identifiers that collide with model fields, relation attnames,
 runtime model attributes, or serializer fields are now rejected with
 ``ImproperlyConfigured`` before annotations or serializer fields are built. This
 check includes filtered, excluded, and type-specific definitions.
+
+This release supports the latest Django 4.2 patch on Python 3.12 and the latest
+Django 5.2 patch on Python 3.13. It requires Django REST Framework ``>3.17,<3.18``.
+Before upgrading, custom serializers must use writable type selectors which persist
+the configured type relation. Custom list serializers must inherit from
+``CustomFieldListSerializer``; validators which change item identity, order, or
+cardinality must implement ``get_paired_item_serializers()``.
+
+Custom-field defaults are create-only. Full and partial updates preserve omitted
+custom values and do not apply those defaults, while defaults on ordinary declared
+DRF fields keep DRF's standard behavior. Submitting fields from another type or
+fields marked ``editable=False`` now returns field-specific validation errors.
+Configured choice defaults are resolved as ``CustomValue`` primary keys regardless
+of the serializer's request lookup field.

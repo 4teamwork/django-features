@@ -142,7 +142,9 @@ type-specific fields have been validated.
 
 DRF defaults configured on the type input field select the applicable custom
 fields on creates and full updates. As with other DRF fields, defaults are not
-applied during partial updates.
+applied during partial updates. Context-aware selector defaults may inspect the
+serializer's static fields, but cannot depend on type-specific dynamic fields
+because those fields cannot be selected until the default resolves the type.
 
 Changing an object's type does not delete stored values belonging to its previous
 type. Those values are omitted from serialization and cannot be submitted while
@@ -210,14 +212,43 @@ Choice input may be a scalar lookup value or an object containing the configured
 list and cannot contain duplicate lookup values. Invalid, missing, ambiguous, and
 duplicate choices produce validation errors instead of database exceptions.
 Lookup comparison follows the Django model field and preserves JSON type identity,
-so boolean and numeric JSON values are not treated as duplicates.
+so booleans, integers, and floating-point JSON values with equal Python values
+remain distinct.
+
+Configured choice defaults use `CustomValue` primary keys (a scalar for a single
+choice or a list for multiple choices), independently of `_unique_choice_field`.
+Request payloads continue to use the serializer's configured choice lookup.
 
 `CustomFieldSerializer` exposes the validation and type metadata clients need to
 build compatible forms, including `allow_blank`, `allow_null`, `default`,
 `editable`, `required`, `type_content_type`, and `type_id`.
 
-The package supports Django 4.2 and 5.2 and requires Django REST Framework 3.16
-or newer.
+#### Compatibility and upgrade notes
+
+The supported and continuously tested combinations are:
+
+| Django | Python | Django REST Framework |
+| --- | --- | --- |
+| Latest 4.2 patch | 3.12 | Latest 3.17 patch (`>3.17,<3.18`) |
+| Latest 5.2 patch | 3.13 | Latest 3.17 patch (`>3.17,<3.18`) |
+
+Upgrading requires Django REST Framework 3.17.1 or newer, but not 3.18. Existing
+custom serializers should also be checked for the following behavioral contracts:
+
+- A type selector must be a writable field whose `source` persists the configured
+  type relation or its `<relation>_id` attribute.
+- A custom `Meta.list_serializer_class` must inherit from
+  `CustomFieldListSerializer`. List validators which change item identity, order,
+  or cardinality must implement `get_paired_item_serializers()`.
+- Values submitted for another type or for `editable=False` fields now produce
+  field-specific validation errors instead of being accepted.
+- Custom-field defaults apply only when creating an object. Full and partial
+  updates preserve omitted custom values and do not apply custom-field defaults.
+  Ordinary declared DRF field defaults retain DRF's normal create/full-update and
+  partial-update behavior.
+
+Built distributions include compiled German, English, and French gettext catalogs;
+consumers do not need to compile package translations separately.
 
 ## System Message
 
