@@ -1,24 +1,28 @@
 import copy
-from collections import namedtuple
+from collections.abc import Hashable
 from collections.abc import Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
-from typing import Hashable
+from typing import NamedTuple
 
+from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
-from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.fields import SkipField
 
+from django_features.custom_fields import helpers as custom_field_helpers
 from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.helpers import get_custom_value_model
 from django_features.custom_fields.models.base import CustomFieldBaseModel
 from django_features.custom_fields.models.field import AbstractBaseCustomField
+from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.field import ValidatedCustomFieldDefault
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
+from django_features.custom_fields.models.value import CustomValueQuerySet
 
 
 class CustomChoiceSerializer(serializers.ModelSerializer):
@@ -67,24 +71,27 @@ class CustomFieldSerializer(serializers.ModelSerializer):
         return CustomChoiceSerializer(obj.choices, many=True).data
 
 
-CustomFieldData = namedtuple(
-    "CustomFieldData",
-    [
-        "id",
-        "identifier",
-        "choices",
-        "choice_field",
-        "multiple",
-        "serializer_field",
-        "custom_field",
-    ],
-)
+class CustomFieldData(NamedTuple):
+    id: int
+    identifier: str
+    choices: CustomValueQuerySet
+    choice_field: bool
+    multiple: bool
+    serializer_field: serializers.Field
+    custom_field: AbstractBaseCustomField
 
 
 @dataclass
 class CustomFieldDefinitionCache:
-    fields_by_type: dict[Hashable | None, list[AbstractBaseCustomField]]
-    identifiers_by_filter: dict[Hashable, set[str]]
+    fields_by_type: dict[Hashable, list[AbstractBaseCustomField]] = dataclass_field(
+        default_factory=dict
+    )
+    identifiers_by_filter: dict[Hashable, set[str]] = dataclass_field(
+        default_factory=dict
+    )
+    identifiers_by_model: dict[type[models.Model], set[str]] = dataclass_field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
@@ -94,6 +101,37 @@ class CustomFieldTypeSelection:
     type_id: int | None
     must_be_present: bool
     resolved: bool = True
+
+
+@dataclass(frozen=True)
+class CustomFieldTypeConfig:
+    input_field: str
+    serializer_field: serializers.Field | None
+    source: str
+
+
+@dataclass(frozen=True)
+class CustomFieldTypeResolution:
+    type_id: int | None
+    selection: CustomFieldTypeSelection | None = None
+
+    @property
+    def failed(self) -> bool:
+        return self.selection is not None and not self.selection.resolved
+
+
+class _UnresolvedCustomFieldType:
+    pass
+
+
+UNRESOLVED_CUSTOM_FIELD_TYPE = _UnresolvedCustomFieldType()
+
+
+class _NoValidatedListData:
+    pass
+
+
+NO_VALIDATED_LIST_DATA = _NoValidatedListData()
 
 
 class CustomFieldListSerializer(serializers.ListSerializer):
@@ -106,44 +144,162 @@ class CustomFieldListSerializer(serializers.ListSerializer):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._custom_field_definition_cache = CustomFieldDefinitionCache({}, {})
+        self._custom_field_definition_cache = CustomFieldDefinitionCache()
         self.child._custom_field_definition_cache = self._custom_field_definition_cache
         self._validated_item_serializers: list[CustomFieldBaseModelSerializer] = []
+        self._validated_item_values: tuple[Any, ...] = ()
+        self._paired_item_serializers: list[CustomFieldBaseModelSerializer] = []
+        self._paired_item_values: tuple[Any, ...] = ()
+        self._validated_list_data: list[Any] | _NoValidatedListData = (
+            NO_VALIDATED_LIST_DATA
+        )
 
     def to_internal_value(self, data: Any) -> list[Any]:
         self._validated_item_serializers = []
-        return super().to_internal_value(data)
+        self._validated_item_values = ()
+        self._paired_item_serializers = []
+        self._paired_item_values = ()
+        self._validated_list_data = NO_VALIDATED_LIST_DATA
+        values = super().to_internal_value(data)
+        self._validated_item_values = tuple(values)
+        return values
 
     def run_child_validation(self, data: Any) -> Any:
         serializer = self.child.for_item(data=data)
         self._validated_item_serializers.append(serializer)
         return serializer.run_validation(data)
 
-    def create(self, validated_data: list[dict[str, Any]]) -> list[Any]:
+    def get_paired_item_serializers(
+        self,
+        validated_data: list[Any],
+    ) -> list["CustomFieldBaseModelSerializer"]:
+        """Pair validated items with their type-specific serializers.
+
+        The default contract allows a list validator to return a new list, but it
+        must preserve every validated item in its original position. Serializers
+        that intentionally replace, reorder, add, or remove items can override this
+        hook and return the matching serializer for every resulting item.
+        """
         if len(self._validated_item_serializers) != len(validated_data):
             raise AssertionError(
                 "List validation changed the number of custom-field serializer "
-                "items. Override create() to define how they should be matched."
+                "items. Override get_paired_item_serializers() to define how they "
+                "should be matched."
             )
+        if len(self._validated_item_values) != len(validated_data) or any(
+            before is not after
+            for before, after in zip(
+                self._validated_item_values,
+                validated_data,
+                strict=True,
+            )
+        ):
+            raise AssertionError(
+                "List validation replaced or reordered custom-field serializer "
+                "items. Override get_paired_item_serializers() to define how they "
+                "should be matched."
+            )
+        return list(self._validated_item_serializers)
+
+    def run_validation(self, data: Any = empty) -> Any:
+        validated_data = super().run_validation(data)
+        paired_item_serializers = self.get_paired_item_serializers(validated_data)
+        if len(paired_item_serializers) != len(validated_data):
+            raise AssertionError(
+                "get_paired_item_serializers() must return one custom-field "
+                "serializer for every validated list item."
+            )
+        self._validate_paired_type_selections(
+            paired_item_serializers,
+            validated_data,
+        )
+        self._paired_item_serializers = paired_item_serializers
+        self._paired_item_values = tuple(validated_data)
+        self._validated_list_data = validated_data
+        return validated_data
+
+    @staticmethod
+    def _validate_paired_type_selections(
+        item_serializers: list["CustomFieldBaseModelSerializer"],
+        data: list[Any],
+    ) -> None:
+        for index, (serializer, item) in enumerate(
+            zip(item_serializers, data, strict=True)
+        ):
+            try:
+                serializer._validate_custom_field_type_selection(
+                    item,
+                    validate_existence=False,
+                )
+            except (ImproperlyConfigured, serializers.ValidationError) as exc:
+                raise AssertionError(
+                    "List data changed the custom-field type selected for item "
+                    f"{index}. Override get_paired_item_serializers() and the "
+                    "type-selection policy to support that transformation."
+                ) from exc
+
+    def _paired_serializers_for(
+        self,
+        data: list[Any],
+        *,
+        require_identity: bool,
+    ) -> list["CustomFieldBaseModelSerializer"]:
+        if len(self._paired_item_serializers) != len(data):
+            raise AssertionError(
+                "Validated list data no longer matches its custom-field serializer "
+                "items. Override create() or to_representation() to define how "
+                "they should be matched."
+            )
+        if require_identity and (
+            len(self._paired_item_values) != len(data)
+            or any(
+                paired is not current
+                for paired, current in zip(
+                    self._paired_item_values,
+                    data,
+                    strict=True,
+                )
+            )
+        ):
+            raise AssertionError(
+                "Validated list items were replaced or reordered after custom-field "
+                "serializer pairing."
+            )
+        self._validate_paired_type_selections(self._paired_item_serializers, data)
+        return self._paired_item_serializers
+
+    def create(self, validated_data: list[dict[str, Any]]) -> list[Any]:
         return [
             serializer.create(attrs)
             for serializer, attrs in zip(
-                self._validated_item_serializers, validated_data, strict=True
+                self._paired_serializers_for(
+                    validated_data,
+                    require_identity=False,
+                ),
+                validated_data,
+                strict=True,
             )
         ]
 
+    def save(self, **kwargs: Any) -> list[Any]:
+        # Check the original validated objects before DRF copies every item and
+        # merges ``save()`` keyword arguments in ListSerializer.save().
+        item_serializers = self._paired_serializers_for(
+            self.validated_data,
+            require_identity=True,
+        )
+        merged_data = [{**attrs, **kwargs} for attrs in self.validated_data]
+        self._validate_paired_type_selections(item_serializers, merged_data)
+        return super().save(**kwargs)
+
     def to_representation(self, data: Any) -> list[Any]:
-        if data is getattr(self, "_validated_data", None):
-            if len(self._validated_item_serializers) != len(data):
-                raise AssertionError(
-                    "List validation changed the number of custom-field serializer "
-                    "items. Override to_representation() to define how they should "
-                    "be matched."
-                )
+        if data is self._validated_list_data:
             return [
                 serializer.to_representation(item)
                 for serializer, item in zip(
-                    self._validated_item_serializers, data, strict=True
+                    self._paired_serializers_for(data, require_identity=True),
+                    data,
+                    strict=True,
                 )
             ]
 
@@ -173,13 +329,15 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         **kwargs: Any,
     ) -> None:
         self._item_serializer_kwargs = dict(kwargs)
-        self._custom_field_type_selection: CustomFieldTypeSelection | None = None
-        self._custom_field_type_resolution_failed = False
-        self._custom_field_type_resolved = False
-        self._resolved_custom_field_type_id: int | None = None
+        self._custom_field_type_resolution: (
+            CustomFieldTypeResolution | _UnresolvedCustomFieldType
+        ) = UNRESOLVED_CUSTOM_FIELD_TYPE
+        self._static_serializer_fields: dict[str, serializers.Field] | None = None
         self._custom_fields = []
         self._all_custom_field_identifiers: set[str] = set()
         self._all_custom_field_identifiers_resolved = False
+        self._model_custom_field_identifiers: set[str] = set()
+        self._model_custom_field_identifiers_resolved = False
         self._custom_field_definition_cache: CustomFieldDefinitionCache | None = (
             kwargs.pop("_custom_field_definition_cache", None)
         )
@@ -190,11 +348,21 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self.write_only_serializer = kwargs.pop(
             "write_only_serializer", self._write_only_serializer
         )
-        if self.custom_field_type_input_field is None:
+        if self.custom_field_type_input_field is None and self.Meta.model is not None:
             self.custom_field_type_input_field = getattr(
-                self.Meta.model, "_custom_field_type_attr", None
+                self.Meta.model,
+                "_custom_field_type_attr",
+                None,
             )
         super().__init__(instance, data, **kwargs)
+
+    @classmethod
+    def get_list_serializer_kwargs(
+        cls,
+        child: "CustomFieldBaseModelSerializer",
+    ) -> dict[str, Any]:
+        """Return extra arguments for the serializer used by ``many=True``."""
+        return {}
 
     @classmethod
     def many_init(cls, *args: Any, **kwargs: Any) -> serializers.ListSerializer:
@@ -204,7 +372,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             value = kwargs.pop(key, None)
             if value is not None:
                 list_kwargs[key] = value
-        list_kwargs["child"] = cls(*args, **kwargs)
+        child = cls(*args, **kwargs)
+        list_kwargs["child"] = child
+        list_kwargs.update(cls.get_list_serializer_kwargs(child))
         list_kwargs.update(
             {
                 key: value
@@ -214,15 +384,22 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         )
         meta = getattr(cls, "Meta", None)
         list_serializer_class = getattr(
-            meta, "list_serializer_class", CustomFieldListSerializer
+            meta,
+            "list_serializer_class",
+            getattr(cls, "list_serializer_class", CustomFieldListSerializer),
         )
         return list_serializer_class(*args, **list_kwargs)
 
     @property
-    def model(self) -> models.Model:
-        if not self.Meta.model:
+    def model(self) -> type[models.Model]:
+        model = getattr(self, "_model", self.Meta.model)
+        if not model:
             raise ValueError("Meta.model must be set")
-        return self.Meta.model
+        return model
+
+    @model.setter
+    def model(self, value: type[models.Model]) -> None:
+        self._model = value
 
     @property
     def filter(self) -> dict[str, Any]:
@@ -231,10 +408,84 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     @filter.setter
     def filter(self, value: dict[str, Any]) -> None:
         self._filter = value
+        self._all_custom_field_identifiers = set()
+        self._all_custom_field_identifiers_resolved = False
+
+    @property
+    def custom_field_type_attr(self) -> str | None:
+        return getattr(self.model, "_custom_field_type_attr", None)
+
+    @property
+    def custom_field_type_model(self) -> type[models.Model] | None:
+        type_attr = self.custom_field_type_attr
+        if not type_attr:
+            return None
+        try:
+            model_field = self.model._meta.get_field(type_attr)
+        except FieldDoesNotExist as exc:
+            raise ImproperlyConfigured(
+                f"{self.model.__name__}._custom_field_type_attr refers to unknown "
+                f"field '{type_attr}'."
+            ) from exc
+        type_model = model_field.related_model
+        if type_model is None:
+            raise ImproperlyConfigured(
+                f"{self.model.__name__}._custom_field_type_attr must refer to a "
+                f"related model field; '{type_attr}' is not relational."
+            )
+        return type_model
+
+    def _get_static_fields(self) -> dict[str, serializers.Field]:
+        if self._static_serializer_fields is None:
+            self._static_serializer_fields = super().get_fields()
+        return self._static_serializer_fields
+
+    def _ensure_fields_initialized(self) -> dict[str, serializers.Field]:
+        return self.fields
+
+    @property
+    def _filter_cache_key(self) -> Hashable:
+        return tuple(sorted((key, repr(value)) for key, value in self.filter.items()))
+
+    def get_model_custom_field_identifiers(self) -> set[str]:
+        """Return every custom-field identifier configured for this model."""
+        if self._model_custom_field_identifiers_resolved:
+            return self._model_custom_field_identifiers
+
+        cache = self._custom_field_definition_cache
+        if cache is not None and self.model in cache.identifiers_by_model:
+            identifiers = cache.identifiers_by_model[self.model]
+        else:
+            identifiers = set(
+                get_custom_field_model()
+                .objects.for_model(self.model)
+                .values_list("identifier", flat=True)
+            )
+            if cache is not None:
+                cache.identifiers_by_model[self.model] = identifiers
+
+        self._model_custom_field_identifiers = identifiers
+        self._model_custom_field_identifiers_resolved = True
+        return identifiers
+
+    def validate_custom_field_identifiers(
+        self,
+        static_fields: Mapping[str, serializers.Field],
+    ) -> None:
+        serializer_reserved = set(static_fields)
+        for serializer_field in static_fields.values():
+            source = serializer_field.source
+            if not serializer_field.read_only and source not in (None, "*"):
+                serializer_reserved.add(source.split(".", 1)[0])
+        custom_field_helpers.validate_custom_field_identifiers(
+            self.model,
+            self.get_model_custom_field_identifiers(),
+            extra_reserved=serializer_reserved,
+        )
 
     def get_fields(self) -> dict[str, Any]:
-        fields = super().get_fields()
-        self._static_serializer_fields = dict(fields)
+        fields = dict(self._get_static_fields())
+        self.validate_custom_field_identifiers(fields)
         if self.exclude_custom_fields:
             return fields
         self._custom_fields = []
@@ -251,8 +502,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         for field in custom_fields:
             try:
                 serialized_field = field.serializer_field
-            except serializers.ValidationError as exc:
-                raise serializers.ValidationError({field.identifier: exc.detail})
+                if field.choice_field:
+                    serialized_field.set_unique_field(self._unique_choice_field)
+            except ValueError as exc:
+                raise ImproperlyConfigured(
+                    f"Cannot build custom field '{field.identifier}' for "
+                    f"{self.model._meta.label}: {exc}"
+                ) from exc
             if not self.is_custom_field_writable(field):
                 # Server-managed fields are never required client input. Keep
                 # their configured default for creates even when the custom-field
@@ -266,8 +522,6 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 # Custom-field defaults are create-only. Both full and partial
                 # updates preserve every omitted custom value.
                 serialized_field.default = empty
-            if field.choice_field:
-                serialized_field.set_unique_field(self._unique_choice_field)
             self._custom_fields.append(
                 CustomFieldData(
                     field.id,
@@ -286,9 +540,13 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         if self._all_custom_field_identifiers_resolved:
             return self._all_custom_field_identifiers
 
-        filter_key = tuple(
-            sorted((key, repr(value)) for key, value in self.filter.items())
-        )
+        if not self.filter:
+            identifiers = self.get_model_custom_field_identifiers()
+            self._all_custom_field_identifiers = identifiers
+            self._all_custom_field_identifiers_resolved = True
+            return identifiers
+
+        filter_key = self._filter_cache_key
         cache = self._custom_field_definition_cache
         if cache is not None and filter_key in cache.identifiers_by_filter:
             identifiers = cache.identifiers_by_filter[filter_key]
@@ -312,12 +570,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
     def get_custom_field_type_input_field(self) -> str | None:
         return self.custom_field_type_input_field
 
-    def get_custom_fields_cache_key(self) -> Hashable | None:
+    def get_custom_fields_cache_key(self) -> Hashable:
         """Return the per-list cache key for the applicable custom fields."""
-        filter_key = tuple(
-            sorted((key, repr(value)) for key, value in self.filter.items())
-        )
-        return self.get_custom_field_type_id(), filter_key
+        return self.get_custom_field_type_id(), self._filter_cache_key
 
     def for_item(
         self, instance: Any = None, data: Any = empty
@@ -347,15 +602,15 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
 
     def _get_custom_field_type_config(
         self,
-    ) -> tuple[str | None, serializers.Field | None, str | None, str | None]:
-        type_attr = getattr(self.model, "_custom_field_type_attr", None)
+    ) -> CustomFieldTypeConfig | None:
         input_field = self.get_custom_field_type_input_field()
-        static_fields = getattr(self, "_static_serializer_fields", None)
-        if static_fields is None:
-            self.fields
-            static_fields = self._static_serializer_fields
+        if not input_field:
+            return None
+
+        type_attr = self.custom_field_type_attr
+        static_fields = self._get_static_fields()
         serializer_field = static_fields.get(input_field)
-        if input_field and serializer_field is None and input_field != type_attr:
+        if serializer_field is None and input_field != type_attr:
             raise ImproperlyConfigured(
                 f"{type(self).__name__}.{input_field} must be declared in "
                 "the serializer fields."
@@ -363,14 +618,18 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         source = (
             serializer_field.source or input_field if serializer_field else input_field
         )
-        if input_field and serializer_field is not None and type_attr:
+        if serializer_field is not None and type_attr:
             allowed_sources = {type_attr, f"{type_attr}_id"}
             if source not in allowed_sources:
                 raise ImproperlyConfigured(
                     f"{type(self).__name__}.{input_field} must map to "
                     f"'{type_attr}' or '{type_attr}_id' through its source."
                 )
-        return input_field, serializer_field, source, type_attr
+        return CustomFieldTypeConfig(
+            input_field=input_field,
+            serializer_field=serializer_field,
+            source=source,
+        )
 
     def _preview_custom_field_type_value(
         self,
@@ -397,102 +656,115 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             value = value.pk
         return int(value) if value is not None else None
 
-    def _remember_custom_field_type_selection(
+    def _resolution_with_selection(
         self,
         *,
-        input_field: str,
-        source: str,
+        config: CustomFieldTypeConfig,
         type_id: int | None,
         must_be_present: bool,
         resolved: bool = True,
-    ) -> int | None:
-        self._custom_field_type_selection = CustomFieldTypeSelection(
-            input_field=input_field,
-            source=source,
+    ) -> CustomFieldTypeResolution:
+        selection = CustomFieldTypeSelection(
+            input_field=config.input_field,
+            source=config.source,
             type_id=type_id,
             must_be_present=must_be_present,
             resolved=resolved,
         )
-        self._custom_field_type_resolved = True
-        self._resolved_custom_field_type_id = type_id
-        return type_id
+        return CustomFieldTypeResolution(type_id=type_id, selection=selection)
 
-    def get_custom_field_type_id(self) -> int | None:
-        if self._custom_field_type_resolved:
-            return self._resolved_custom_field_type_id
-
-        input_field, serializer_field, source, type_attr = (
-            self._get_custom_field_type_config()
-        )
+    def _type_resolution_from_input(
+        self,
+        config: CustomFieldTypeConfig,
+    ) -> CustomFieldTypeResolution | None:
+        serializer_field = config.serializer_field
         initial_data = getattr(self, "initial_data", empty)
-
         if (
-            input_field
-            and serializer_field is not None
-            and not serializer_field.read_only
-            and isinstance(initial_data, Mapping)
+            serializer_field is None
+            or serializer_field.read_only
+            or not isinstance(initial_data, Mapping)
         ):
-            submitted = input_field in initial_data
-            value = initial_data[input_field] if submitted else empty
-            try:
-                converted = self._preview_custom_field_type_value(
-                    input_field, serializer_field, value
-                )
-            except SkipField:
-                pass
-            except serializers.ValidationError:
-                self._custom_field_type_resolution_failed = True
-                return self._remember_custom_field_type_selection(
-                    input_field=input_field,
-                    source=source or input_field,
-                    type_id=None,
-                    must_be_present=submitted or serializer_field.required,
-                    resolved=False,
-                )
-            else:
-                try:
-                    type_id = self._normalize_custom_field_type_id(converted)
-                except (TypeError, ValueError):
-                    self._custom_field_type_resolution_failed = True
-                    return self._remember_custom_field_type_selection(
-                        input_field=input_field,
-                        source=source or input_field,
-                        type_id=None,
-                        must_be_present=True,
-                        resolved=False,
-                    )
-                return self._remember_custom_field_type_selection(
-                    input_field=input_field,
-                    source=source or input_field,
-                    type_id=type_id,
-                    must_be_present=True,
-                )
+            return None
 
+        submitted = config.input_field in initial_data
+        value = initial_data[config.input_field] if submitted else empty
+        try:
+            converted = self._preview_custom_field_type_value(
+                config.input_field,
+                serializer_field,
+                value,
+            )
+        except SkipField:
+            return None
+        except serializers.ValidationError:
+            return self._resolution_with_selection(
+                config=config,
+                type_id=None,
+                must_be_present=submitted or serializer_field.required,
+                resolved=False,
+            )
+
+        try:
+            type_id = self._normalize_custom_field_type_id(converted)
+        except (TypeError, ValueError):
+            return self._resolution_with_selection(
+                config=config,
+                type_id=None,
+                must_be_present=True,
+                resolved=False,
+            )
+        return self._resolution_with_selection(
+            config=config,
+            type_id=type_id,
+            must_be_present=True,
+        )
+
+    def _type_resolution_from_instance(
+        self,
+        config: CustomFieldTypeConfig | None,
+    ) -> CustomFieldTypeResolution:
         type_id = None
+        type_attr = self.custom_field_type_attr
         if isinstance(self.instance, self.model) and type_attr:
             type_id = getattr(self.instance, f"{type_attr}_id", None)
-        if input_field and source:
-            return self._remember_custom_field_type_selection(
-                input_field=input_field,
-                source=source,
-                type_id=type_id,
-                must_be_present=False,
-            )
-        self._custom_field_type_resolved = True
-        self._resolved_custom_field_type_id = type_id
-        return type_id
+        if config is None:
+            return CustomFieldTypeResolution(type_id=type_id)
+        return self._resolution_with_selection(
+            config=config,
+            type_id=type_id,
+            must_be_present=False,
+        )
+
+    def get_custom_field_type_id(self) -> int | None:
+        cached_resolution = self._custom_field_type_resolution
+        if isinstance(cached_resolution, CustomFieldTypeResolution):
+            return cached_resolution.type_id
+
+        config = self._get_custom_field_type_config()
+        input_resolution = (
+            self._type_resolution_from_input(config) if config is not None else None
+        )
+        resolution = input_resolution or self._type_resolution_from_instance(config)
+        self._custom_field_type_resolution = resolution
+        return resolution.type_id
 
     def _get_validated_custom_field_type_id(
         self,
         selection: CustomFieldTypeSelection,
         validated_type: Any,
+        *,
+        source: str | None = None,
+        validate_existence: bool = True,
     ) -> int | None:
-        type_attr = getattr(self.model, "_custom_field_type_attr", None)
+        type_attr = self.custom_field_type_attr
         if not type_attr:
             return self._normalize_custom_field_type_id(validated_type)
 
-        type_model = self.model._meta.get_field(type_attr).related_model
-        if selection.source == type_attr:
+        source = source or selection.source
+        type_model = self.custom_field_type_model
+        if type_model is None:
+            raise AssertionError("A configured custom-field type must have a model.")
+        if source == type_attr:
             if validated_type is not None and not isinstance(
                 validated_type, type_model
             ):
@@ -517,7 +789,8 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
             ) from exc
 
         if (
-            selection.source == f"{type_attr}_id"
+            validate_existence
+            and source == f"{type_attr}_id"
             and type_id is not None
             and not type_model._base_manager.filter(pk=type_id).exists()
         ):
@@ -543,48 +816,95 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         """
         return True
 
-    def run_validation(self, data: Any = empty) -> Any:
-        validated_data = super().run_validation(data)
-        selection = self._custom_field_type_selection
+    @staticmethod
+    def _custom_field_type_mismatch_error(
+        selection: CustomFieldTypeSelection,
+    ) -> serializers.ValidationError:
+        return serializers.ValidationError(
+            {
+                selection.input_field: [
+                    _(
+                        "The validated type does not match the submitted "
+                        "custom field type."
+                    )
+                ]
+            }
+        )
+
+    def _validate_custom_field_type_selection(
+        self,
+        validated_data: Mapping[str, Any],
+        *,
+        validate_existence: bool = True,
+    ) -> None:
+        resolution = self._custom_field_type_resolution
+        if not isinstance(resolution, CustomFieldTypeResolution):
+            return
+        selection = resolution.selection
         if selection is None:
-            return validated_data
+            return
 
         validated_type = validated_data.get(selection.source, empty)
-        if validated_type is empty and not selection.must_be_present:
-            return validated_data
-        if not self.should_validate_custom_field_type_selection(
-            selection, validated_type
-        ):
-            return validated_data
-        if validated_type is empty:
-            validated_type_id = None
-        else:
-            validated_type_id = self._get_validated_custom_field_type_id(
-                selection, validated_type
-            )
+        type_attr = self.custom_field_type_attr
+        alternate_sources = []
+        if type_attr:
+            alternate_sources = [
+                source
+                for source in (type_attr, f"{type_attr}_id")
+                if source != selection.source and source in validated_data
+            ]
 
         if (
-            not selection.resolved
-            or validated_type is empty
-            or validated_type_id != selection.type_id
+            validated_type is empty
+            and not selection.must_be_present
+            and not alternate_sources
         ):
-            raise serializers.ValidationError(
-                {
-                    selection.input_field: [
-                        _(
-                            "The validated type does not match the submitted "
-                            "custom field type."
-                        )
-                    ]
-                }
+            return
+        policy_value = (
+            validated_type
+            if validated_type is not empty
+            else (validated_data[alternate_sources[0]] if alternate_sources else empty)
+        )
+        if not self.should_validate_custom_field_type_selection(
+            selection,
+            policy_value,
+        ):
+            return
+        if validated_type is empty:
+            if selection.must_be_present or not selection.resolved:
+                raise self._custom_field_type_mismatch_error(selection)
+        else:
+            validated_type_id = self._get_validated_custom_field_type_id(
+                selection,
+                validated_type,
+                validate_existence=validate_existence,
             )
+            if not selection.resolved or validated_type_id != selection.type_id:
+                raise self._custom_field_type_mismatch_error(selection)
+
+        for alternate_source in alternate_sources:
+            alternate_id = self._get_validated_custom_field_type_id(
+                selection,
+                validated_data[alternate_source],
+                source=alternate_source,
+                validate_existence=validate_existence,
+            )
+            if validated_type is not empty or alternate_id != selection.type_id:
+                raise self._custom_field_type_mismatch_error(selection)
+
+    def run_validation(self, data: Any = empty) -> Any:
+        validated_data = super().run_validation(data)
+        self._validate_custom_field_type_selection(validated_data)
         return validated_data
 
-    def get_custom_fields_queryset(self) -> QuerySet:
+    def get_custom_fields_queryset(self) -> CustomFieldQuerySet:
         queryset = get_custom_field_model().objects.for_model(self.model)
-        type_attr = getattr(self.model, "_custom_field_type_attr", None)
-        if type_attr:
-            type_model = self.model._meta.get_field(type_attr).related_model
+        if self.custom_field_type_attr:
+            type_model = self.custom_field_type_model
+            if type_model is None:
+                raise AssertionError(
+                    "A configured custom-field type must have a model."
+                )
             queryset = queryset.for_model_and_type(
                 self.model, type_model, self.get_custom_field_type_id()
             )
@@ -597,10 +917,11 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         if self.exclude_custom_fields or not isinstance(data, Mapping):
             return super().to_internal_value(data)
 
-        # Evaluate the fields before applying custom-field policy so the applicable
-        # field and identifier caches are populated.
-        self.fields
-        if self._custom_field_type_resolution_failed:
+        # Initialize dynamic fields before applying custom-field policy so the
+        # applicable field and identifier caches are populated.
+        self._ensure_fields_initialized()
+        resolution = self._custom_field_type_resolution
+        if isinstance(resolution, CustomFieldTypeResolution) and resolution.failed:
             return super().to_internal_value(data)
         applicable = {
             field.custom_field.identifier: field.custom_field
@@ -623,9 +944,6 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def collect_custom_fields(self) -> dict:
-        if not hasattr(self, "_custom_fields"):
-            return {}
-
         if hasattr(self, "initial_data"):
             data = self.validated_data
         elif self.instance is not None:
@@ -639,6 +957,10 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data: dict) -> Any:
+        self._validate_custom_field_type_selection(
+            validated_data,
+            validate_existence=False,
+        )
         custom_value_instances: list[AbstractBaseCustomValue] = []
         choices: list[AbstractBaseCustomValue] = []
         representation_values: dict[str, Any] = {}
@@ -712,6 +1034,10 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 instance.custom_values.add(value_object)
 
     def update(self, instance: Any, validated_data: dict) -> Any:
+        self._validate_custom_field_type_selection(
+            validated_data,
+            validate_existence=False,
+        )
         representation_values: dict[str, Any] = {}
         for field in self._custom_fields:
             if field.identifier not in validated_data:

@@ -15,6 +15,7 @@ from django_extensions.db.models import TimeStampedModel
 
 from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.helpers import get_custom_value_model
+from django_features.custom_fields.helpers import validate_custom_field_identifiers
 from django_features.custom_fields.models.field import AbstractBaseCustomField
 from django_features.custom_fields.models.field import CustomFieldQuerySet
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
@@ -82,6 +83,11 @@ class CustomFieldModelBaseManager(models.Manager):
         """
         try:
             available_fields = get_custom_field_model().objects.for_model(self.model)
+            field_definitions = list(available_fields)
+            validate_custom_field_identifiers(
+                self.model,
+                (field.identifier for field in field_definitions),
+            )
 
             """
             This for loop creates a dict with all available custom field values with a subquery for the specific object.
@@ -91,7 +97,7 @@ class CustomFieldModelBaseManager(models.Manager):
             https://docs.djangoproject.com/en/5.2/ref/models/expressions/#subquery-expressions
             """
             fields = {
-                field.identifier: self._subquery(field) for field in available_fields
+                field.identifier: self._subquery(field) for field in field_definitions
             }
 
             """

@@ -1,18 +1,71 @@
 __all__ = [
-    "get_custom_field_model",
-    "get_custom_value_model",
     "clear_custom_field_model_cache",
+    "get_custom_field_model",
+    "get_reserved_custom_field_identifiers",
+    "get_custom_value_model",
+    "validate_custom_field_identifiers",
 ]
 
 
+from collections.abc import Iterable
 from functools import lru_cache
 
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import models
 
 from django_features.custom_fields.models.field import AbstractBaseCustomField
 from django_features.custom_fields.models.value import AbstractBaseCustomValue
+
+
+# These attributes are installed on CustomFieldBaseModel instances instead of on
+# the model class, so ``dir(model)`` cannot discover them.  A custom-field value
+# must never be injected into any of them through an annotation or ``__dict__``.
+CUSTOM_FIELD_INSTANCE_RESERVED_IDENTIFIERS = frozenset(
+    {
+        "_custom_values_to_delete",
+        "_custom_values_to_remove",
+        "_custom_values_to_save",
+        "_prefetched_objects_cache",
+        "_state",
+        "custom_field_keys",
+        "handle_custom_values",
+    }
+)
+
+
+def get_reserved_custom_field_identifiers(
+    model: type[models.Model],
+) -> set[str]:
+    """Return model and framework-instance names unavailable to custom fields."""
+    reserved = set(CUSTOM_FIELD_INSTANCE_RESERVED_IDENTIFIERS)
+    reserved.update(dir(model))
+    for model_field in model._meta.get_fields():
+        reserved.add(model_field.name)
+        attname = getattr(model_field, "attname", None)
+        if attname:
+            reserved.add(attname)
+    return reserved
+
+
+def validate_custom_field_identifiers(
+    model: type[models.Model],
+    identifiers: Iterable[str],
+    *,
+    extra_reserved: Iterable[str] = (),
+) -> None:
+    """Reject identifiers that could overwrite model or serializer state."""
+    reserved = get_reserved_custom_field_identifiers(model)
+    reserved.update(extra_reserved)
+    collisions = set(identifiers) & reserved
+    if not collisions:
+        return
+    formatted = ", ".join(repr(identifier) for identifier in sorted(collisions))
+    raise ImproperlyConfigured(
+        f"Custom field identifier(s) {formatted} for {model._meta.label} "
+        "conflict with reserved model or serializer attributes."
+    )
 
 
 @lru_cache(maxsize=1)

@@ -131,7 +131,14 @@ type is omitted, the instance type is used. With `many=True`, every input or
 instance is evaluated separately, so heterogeneous lists are supported. A custom
 `Meta.list_serializer_class` must inherit from `CustomFieldListSerializer` to
 retain this per-item behavior. `ListDataMappingSerializer` already provides this
-behavior and applies mapping hooks once for each original list item.
+behavior and applies mapping hooks once for each original list item. By default,
+list-level validation must preserve the number, position, and identity of those
+validated items (returning a new list containing the same items is supported). A
+specialized list serializer that intentionally reorders, replaces, adds, or
+removes items must override `get_paired_item_serializers()` and return the child
+serializer paired with every item in the resulting list. List validation and
+`save()` keyword arguments may not change an item's selected type after its
+type-specific fields have been validated.
 
 DRF defaults configured on the type input field select the applicable custom
 fields on creates and full updates. As with other DRF fields, defaults are not
@@ -157,6 +164,10 @@ The following hooks can be overridden for application-specific behavior:
 - `for_item(instance=..., data=...)` constructs serializers used by `many=True`.
   Serializers with extra constructor arguments should override it and retain the
   shared custom-field definition cache.
+- `CustomFieldListSerializer.get_paired_item_serializers(validated_data)` defines
+  how the per-item serializers are paired after list-level validation. Override
+  it when a custom list validator intentionally changes item positions or
+  identities.
 
 For example, an optional constructor value used by custom hooks can be copied to
 each per-item serializer after the base implementation has preserved the normal
@@ -179,6 +190,10 @@ serializer options such as `exclude_custom_fields` and `write_only_serializer`
 are consumed by the base serializer and are not forwarded to Django REST
 Framework. Mapping serializers also ignore mapped custom-field values when
 custom fields are excluded, while continuing to process ordinary model mappings.
+Custom-field identifiers must not collide with model fields, relation attnames,
+model/runtime attributes, or writable serializer field names and sources. Such
+configuration is rejected before annotations or serializer fields are built,
+including for filtered, type-specific, and excluded definitions.
 
 Submitted values for a different type and values for fields with
 `editable=False` are rejected with field-specific validation errors. Trusted

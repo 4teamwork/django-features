@@ -26,3 +26,8 @@ custom values while continuing to process normal model fields.
 Multiple-choice validation now materializes its validated choices and compares
 JSON lookup values with type-sensitive identities, so values such as ``true`` and
 ``1`` remain distinct.
+
+Custom-field identifiers that collide with model fields, relation attnames,
+runtime model attributes, or serializer fields are now rejected with
+``ImproperlyConfigured`` before annotations or serializer fields are built. This
+check includes filtered, excluded, and type-specific definitions.
