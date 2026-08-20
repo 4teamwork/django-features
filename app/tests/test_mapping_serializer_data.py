@@ -1,6 +1,9 @@
 from typing import Any
 
+from django.contrib.contenttypes.models import ContentType
+
 from app import models
+from app.custom_field.tests.factories import CustomFieldFactory
 from app.tests import APITestCase
 from app.tests.factories import PersonFactory
 from django_features.serializers import ListDataMappingSerializer
@@ -101,6 +104,58 @@ class OverridingListSerializer(ListDataMappingSerializer):
 class CustomListMappingSerializer(NullableFieldMappingSerializer):
     class Meta(NullableFieldMappingSerializer.Meta):
         list_serializer_class = OverridingListSerializer
+
+
+class ClassListMappingSerializer(NullableFieldMappingSerializer):
+    list_serializer_class = OverridingListSerializer
+
+
+class DefaultExcludingMappingSerializer(MappingSerializer):
+    _exclude_custom_fields = True
+
+    class Meta:
+        model = models.Person
+        fields = "__all__"
+
+    @property  # type: ignore[misc]
+    def mapping(self) -> dict[str, dict[str, Any]]:
+        return {"person": {"external_custom": "mapped_custom"}}
+
+
+class FilteredExcludingMappingSerializer(MappingSerializer):
+    _exclude_custom_fields = True
+
+    class Meta:
+        model = models.Person
+        fields = "__all__"
+
+    @property  # type: ignore[misc]
+    def mapping(self) -> dict[str, dict[str, Any]]:
+        return {"person": {"external_filtered_out": "filtered_out_custom"}}
+
+    @property
+    def filter(self) -> dict[str, Any]:
+        return {"identifier": "included_custom"}
+
+    @filter.setter
+    def filter(self, value: dict[str, Any]) -> None:
+        self._filter = value
+
+
+class NestedAddressCustomFieldMappingSerializer(MappingSerializer):
+    class Meta:
+        model = models.Person
+        fields = "__all__"
+
+    @property  # type: ignore[misc]
+    def mapping(self) -> dict[str, dict[str, Any]]:
+        return {
+            "person": {
+                "external_firstname": "firstname",
+                "external_city": "addresses.city",
+                "external_address_custom": "addresses.address_custom",
+            }
+        }
 
 
 class DefaultedModelFieldMappingSerializer(MappingSerializer):
@@ -281,6 +336,93 @@ class MappingSerializerTestCase(APITestCase):
         )
 
         self.assertEqual(serializer.initial_data, [{"lastname": "Overridden lastname"}])
+
+    def test_meta_list_serializer_preserves_mapping_model_and_list_kwargs(
+        self,
+    ) -> None:
+        serializer = CustomListMappingSerializer(
+            many=True,
+            allow_empty=False,
+            min_length=1,
+            max_length=2,
+        )
+
+        self.assertIsInstance(serializer, OverridingListSerializer)
+        self.assertEqual(serializer.mapping, serializer.child.mapping)
+        self.assertIs(serializer.model, models.Person)
+        self.assertFalse(serializer.allow_empty)
+        self.assertEqual(serializer.min_length, 1)
+        self.assertEqual(serializer.max_length, 2)
+
+    def test_class_list_serializer_is_used_without_a_meta_override(self) -> None:
+        serializer = ClassListMappingSerializer(many=True)
+
+        self.assertIsInstance(serializer, OverridingListSerializer)
+        self.assertEqual(serializer.mapping, serializer.child.mapping)
+        self.assertIs(serializer.model, models.Person)
+
+    def test_many_representation_accepts_positional_instances(self) -> None:
+        first = PersonFactory(lastname="First")
+        second = PersonFactory(lastname="Second")
+
+        data = NullableFieldMappingSerializer([first, second], many=True).data
+
+        self.assertEqual(data, [{"lastname": "First"}, {"lastname": "Second"}])
+
+    def test_explicit_false_overrides_class_level_custom_field_exclusion(
+        self,
+    ) -> None:
+        CustomFieldFactory(identifier="mapped_custom")
+
+        excluded = DefaultExcludingMappingSerializer(
+            data={"external_custom": "excluded"}
+        )
+        included = DefaultExcludingMappingSerializer(
+            data={"external_custom": "included"},
+            exclude_custom_fields=False,
+        )
+
+        self.assertTrue(excluded.exclude_custom_fields)
+        self.assertEqual(excluded.initial_data, {})
+        self.assertNotIn("mapped_custom", excluded.fields)
+        self.assertFalse(included.exclude_custom_fields)
+        self.assertEqual(included.initial_data, {"mapped_custom": "included"})
+        self.assertIn("mapped_custom", included.fields)
+
+    def test_exclusion_uses_unfiltered_model_custom_field_identifiers(self) -> None:
+        CustomFieldFactory(identifier="included_custom")
+        CustomFieldFactory(identifier="filtered_out_custom")
+
+        serializer = FilteredExcludingMappingSerializer(
+            data={"external_filtered_out": "excluded"}
+        )
+
+        self.assertEqual(serializer.filter, {"identifier": "included_custom"})
+        self.assertEqual(serializer.initial_data, {})
+
+    def test_custom_field_exclusion_is_propagated_to_nested_mapping(self) -> None:
+        CustomFieldFactory(
+            identifier="address_custom",
+            content_type=ContentType.objects.get_for_model(models.Address),
+        )
+        serializer = NestedAddressCustomFieldMappingSerializer(
+            data={
+                "external_firstname": "Nested",
+                "external_city": "Bern",
+                "external_address_custom": "excluded",
+            },
+            exclude_custom_fields=True,
+        )
+
+        nested = serializer.fields["addresses"]
+
+        self.assertTrue(nested.exclude_custom_fields)
+        self.assertNotIn("address_custom", nested.fields)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data,
+            {"firstname": "Nested", "addresses": {"city": "Bern"}},
+        )
 
     def test_invalid_non_mapping_input_is_left_for_drf_validation(self) -> None:
         serializer = NullableFieldMappingSerializer(data=[])

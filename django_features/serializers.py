@@ -4,11 +4,9 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
-from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.relations import ManyRelatedField
 
-from django_features.custom_fields.helpers import get_custom_field_model
 from django_features.custom_fields.serializers import CustomFieldBaseModelSerializer
 from django_features.custom_fields.serializers import CustomFieldListSerializer
 from django_features.custom_fields.serializers import CustomFieldTypeSelection
@@ -61,7 +59,7 @@ class PropertySerializerMixin:
         self._model_mapping = value
 
     @property
-    def model(self) -> models.Model:
+    def model(self) -> type[models.Model]:
         model = getattr(self, "_model", self.Meta.model)
         if model is None:
             raise ValueError(
@@ -70,7 +68,7 @@ class PropertySerializerMixin:
         return model
 
     @model.setter
-    def model(self, value: models.Model) -> None:
+    def model(self, value: type[models.Model]) -> None:
         self._model = value
 
 
@@ -151,6 +149,7 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
             fields[field_name] = NestedMappingSerializer(
                 data=nested_data,
                 exclude=[*self.exclude, self.model.__name__.lower()],
+                exclude_custom_fields=self.exclude_custom_fields,
                 field=field,
                 nested_fields=nested_field_fields[field_name],
                 parent_mapping=self.mapping,
@@ -164,23 +163,11 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
         return fields
 
     def should_map_internal_field(self, internal_name: str) -> bool:
-        if not getattr(self, "exclude_custom_fields", False):
+        if not self.exclude_custom_fields:
             return True
 
-        identifiers = getattr(
-            self,
-            "_excluded_mapping_custom_field_identifiers",
-            None,
-        )
-        if identifiers is None:
-            identifiers = set(
-                get_custom_field_model()
-                .objects.for_model(self.model)
-                .values_list("identifier", flat=True)
-            )
-            self._excluded_mapping_custom_field_identifiers = identifiers
         field_name = internal_name.split(self.relation_separator, 1)[0]
-        return field_name not in identifiers
+        return field_name not in self.get_model_custom_field_identifiers()
 
     def should_validate_custom_field_type_selection(
         self,
@@ -191,6 +178,10 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
         return not isinstance(serializer_field, NestedMappingSerializer)
 
     def create(self, validated_data: dict[str, Any]) -> models.Model:
+        self._validate_custom_field_type_selection(
+            validated_data,
+            validate_existence=False,
+        )
         relations_to_save: dict[str, Any] = {}
         for field in self.related_fields:
             if field not in validated_data:
@@ -214,6 +205,10 @@ class BaseMappingSerializer(CustomFieldBaseModelSerializer, PropertySerializerMi
     def update(
         self, instance: models.Model, validated_data: dict[str, Any]
     ) -> models.Model:
+        self._validate_custom_field_type_selection(
+            validated_data,
+            validate_existence=False,
+        )
         for field in self.related_fields:
             if field not in validated_data:
                 continue
@@ -250,14 +245,14 @@ class NestedMappingSerializer(BaseMappingSerializer):
         class Meta(self.Meta):  # type: ignore[name-defined]
             model = field.related_model
 
-        setattr(self, "Meta", Meta)
+        self.Meta = Meta  # type: ignore[misc]
         super().__init__(*args, **kwargs)
 
 
 class DataMappingSerializerMixin(PropertySerializerMixin):
     _default_prefix = "default"
     _format_prefix = "format"
-    unmapped_data: Any
+    unmapped_data: Any = empty
 
     def should_map_internal_field(self, internal_name: str) -> bool:
         return True
@@ -323,12 +318,17 @@ class ListDataMappingSerializer(
     DataMappingSerializerMixin,
     CustomFieldListSerializer,
 ):
-    def __init__(self, data: Any = empty, *args: Any, **kwargs: Any) -> None:
-        self.instance = None
+    def __init__(
+        self,
+        instance: Any = None,
+        data: Any = empty,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         self.mapping = kwargs.pop("mapping", {})
         self.model = kwargs.pop("model")
         self.unmapped_data = data if data is not empty else []
-        super().__init__(data=data, *args, **kwargs)
+        super().__init__(instance, data, *args, **kwargs)
         if data is not empty:
             self.initial_data = self.map_list_data(data)
 
@@ -367,14 +367,10 @@ class MappingSerializer(BaseMappingSerializer, DataMappingSerializerMixin):
         data: Any = empty,
         **kwargs: Any,
     ) -> None:
-        self.instance = instance
         self.unmapped_data = data
-        self.exclude_custom_fields = kwargs.get(
-            "exclude_custom_fields",
-            self._exclude_custom_fields,
-        )
-        mapped_data = self.map_data(data)
-        super().__init__(instance, data=mapped_data, **kwargs)
+        super().__init__(instance=instance, data=empty, **kwargs)
+        if data is not empty:
+            self.initial_data = self.map_data(data)
 
     def for_mapped_item(
         self,
@@ -389,32 +385,15 @@ class MappingSerializer(BaseMappingSerializer, DataMappingSerializerMixin):
         return serializer
 
     @classmethod
-    def many_init(cls, *args: Any, **kwargs: Any) -> ListDataMappingSerializer:
-        """
-        Overwrite the many_init function from the ModelSerializer to change the default listing serializer to the given
-        list_serializer_class attribute instead of the default ListSerializer. Therefore, the list serializer class can
-        be set with the attribute list_serializer_class on the serializer class instead of the Meta class.
-        """
-
-        list_kwargs = {}
-        for key in serializers.LIST_SERIALIZER_KWARGS_REMOVE:
-            value = kwargs.pop(key, None)
-            if value is not None:
-                list_kwargs[key] = value
-        child = cls(*args, **kwargs)
-        list_kwargs["child"] = child
-        list_kwargs["mapping"] = getattr(child, "mapping", {})
+    def get_list_serializer_kwargs(
+        cls,
+        child: CustomFieldBaseModelSerializer,
+    ) -> dict[str, Any]:
+        list_kwargs = super().get_list_serializer_kwargs(child)
         list_kwargs.update(
             {
-                key: value
-                for key, value in kwargs.items()
-                if key in serializers.LIST_SERIALIZER_KWARGS
+                "mapping": getattr(child, "mapping", {}),
+                "model": child.model,
             }
         )
-        meta = getattr(cls, "Meta", None)
-        list_serializer_class = getattr(
-            meta, "list_serializer_class", cls.list_serializer_class
-        )
-        model = getattr(meta, "model", None)
-        list_kwargs["model"] = model
-        return list_serializer_class(*args, **list_kwargs)
+        return list_kwargs
