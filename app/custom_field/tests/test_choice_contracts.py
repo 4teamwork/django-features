@@ -157,6 +157,28 @@ def test_ambiguous_choices_and_type_aware_values(multiple: bool) -> None:
 @pytest.mark.parametrize(
     "field_type,default,multiple",
     [
+        ("BOOLEAN", False, False),
+        ("INTEGER", 0, False),
+        ("CHAR", "", False),
+        ("CHAR", [], True),
+        ("CHAR", [""], True),
+        ("INTEGER", [0], True),
+    ],
+)
+def test_falsy_defaults(field_type: str, default: Any, multiple: bool) -> None:
+    field = CustomFieldFactory(
+        field_type=field_type, default=default, multiple=multiple
+    )
+    serializer = field.serializer_field
+    assert serializer.run_validation(empty) == default
+    assert serializer.run_validation(default) == default
+    assert serializer.run_validation(None) is None
+    assert CustomFieldSerializer(field).data["default"] == default
+
+
+@pytest.mark.parametrize(
+    "field_type,default,multiple",
+    [
         ("INTEGER", [], False),
         ("CHAR", "text", True),
         ("CHAR", [], True),
@@ -173,6 +195,31 @@ def test_invalid_default_configuration(
     with pytest.raises(ConfigurationError) as caught:
         field.clean()
     assert "default" in caught.value.message_dict
+
+
+def test_choice_defaults_are_validated_objects(django_assert_num_queries: Any) -> None:
+    field = CustomFieldFactory(choice_field=True)
+    choice = CustomValueFactory(field=field)
+    field.default = choice.id
+    assert field.serializer_field.run_validation(empty) == choice
+    field.multiple = True
+    field.default = []
+    assert list(field.serializer_field.run_validation(empty)) == []
+    field.default = [choice.id]
+    assert list(field.serializer_field.run_validation(empty)) == [choice]
+    validator = ChoiceIdField(
+        field, unique_field="value", choices=[choice], default=field.default
+    )
+    pk_field = CustomValue._meta.pk
+    with django_assert_num_queries(0), patch.object(
+        pk_field, "to_python", wraps=pk_field.to_python
+    ) as normalize_pk:
+        assert list(validator.run_validation([choice.value])) == [choice]
+        assert list(validator.run_validation(empty)) == [choice]
+        assert list(validator.run_validation([choice.value])) == [choice]
+        assert list(validator.run_validation(empty)) == [choice]
+    # One catalog key plus the two default IDs; the PK index is reused.
+    assert normalize_pk.call_count == 3
 
 
 @pytest.mark.parametrize("number", [1, 12])

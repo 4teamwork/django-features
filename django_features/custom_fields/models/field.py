@@ -1,4 +1,6 @@
 import logging
+from copy import deepcopy
+from functools import partial
 from typing import Any
 
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -14,6 +16,14 @@ from django_features.custom_fields.models.value import CustomValueQuerySet
 
 
 logger = logging.getLogger("django_features.custom_fields")
+
+
+class CustomFieldCreateOnlyDefault(serializers.CreateOnlyDefault):
+    def __call__(self, serializer_field: serializers.Field) -> Any:
+        # Standalone model-provided fields remain usable for creation validation.
+        if serializer_field.parent is None:
+            return self.default() if callable(self.default) else self.default
+        return super().__call__(serializer_field)
 
 
 def warn_invalid_default(field: "AbstractBaseCustomField") -> None:
@@ -197,8 +207,16 @@ class AbstractBaseCustomField(TimeStampedModel):
     @property
     def serializer_field(self) -> serializers.Field:
         result = self._serializer_field()
-        if self.default and not self.required and not self.choice_field:
-            result.default = self.default
+        if self.default is not None and not self.required:
+            if self.choice_field:
+                result.default = CustomFieldCreateOnlyDefault(self.default)
+            else:
+                try:
+                    result.default = CustomFieldCreateOnlyDefault(
+                        partial(deepcopy, result.run_validation(self.default))
+                    )
+                except serializers.ValidationError:
+                    warn_invalid_default(self)
         return result
 
     def validate_default(
