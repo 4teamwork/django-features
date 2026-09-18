@@ -16,6 +16,26 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: app/custom_field/models/base.py app/custom_field/models/value.py
+msgid "Benutzerdefinierte Werte"
+msgstr ""
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefiniertes Feld"
+msgstr ""
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefinierte Felder"
+msgstr ""
+
+#: app/custom_field/models/value.py
+msgid "Feld"
+msgstr ""
+
+#: app/custom_field/models/value.py
+msgid "Benutzerdefinierter Wert"
+msgstr ""
+
 #: app/settings/base.py
 msgid "Deutsch"
 msgstr ""
@@ -26,11 +46,6 @@ msgstr ""
 
 #: app/settings/base.py
 msgid "Französisch"
-msgstr ""
-
-#: django_features/custom_fields/models/base.py
-#: django_features/custom_fields/models/value.py
-msgid "Benutzerdefinierte Werte"
 msgstr ""
 
 #: django_features/custom_fields/models/field.py
@@ -90,16 +105,16 @@ msgid "Ausblenden"
 msgstr ""
 
 #: django_features/custom_fields/models/field.py
+msgid "Als Filter anbieten"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
 #: django_features/system_message/models.py
 msgid "Name"
 msgstr ""
 
 #: django_features/custom_fields/models/field.py
 msgid "Liste"
-msgstr ""
-
-#: django_features/custom_fields/models/field.py
-msgid "Mehrfachauswahlfeld"
 msgstr ""
 
 #: django_features/custom_fields/models/field.py
@@ -113,27 +128,27 @@ msgid "Erforderlich"
 msgstr ""
 
 #: django_features/custom_fields/models/field.py
-msgid "Benutzerdefiniertes Feld"
-msgstr ""
+msgid "Select a supported field type."
+msgstr "Wählen Sie einen unterstützten Feldtyp."
 
 #: django_features/custom_fields/models/field.py
-msgid "Benutzerdefinierte Felder"
-msgstr ""
+msgid "The default does not satisfy the field rules."
+msgstr "Der Standardwert entspricht nicht den Feldregeln."
 
 #: django_features/custom_fields/models/value.py
-msgid "Feld"
-msgstr ""
-
-#: django_features/custom_fields/models/value.py
-msgid "Text"
-msgstr ""
+msgid "Label"
+msgstr "Bezeichnung"
 
 #: django_features/custom_fields/models/value.py
 msgid "Wert"
 msgstr ""
 
-#: django_features/custom_fields/models/value.py
-msgid "Benutzerdefinierter Wert"
+#: django_features/fields.py
+msgid "Objekt existiert nicht."
+msgstr ""
+
+#: django_features/fields.py
+msgid "Inkorrekter Typ."
 msgstr ""
 
 #: django_features/system_message/models.py
@@ -187,11 +202,3 @@ msgstr ""
 #: django_features/system_message/models.py
 msgid "Systemmeldungen"
 msgstr ""
-
-#: django_features/custom_fields/models/field.py
-msgid "The default does not satisfy the field rules."
-msgstr "Der Standardwert entspricht nicht den Feldregeln."
-
-#: django_features/custom_fields/models/field.py
-msgid "Select a supported field type."
-msgstr "Wählen Sie einen unterstützten Feldtyp."
