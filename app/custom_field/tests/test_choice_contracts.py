@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
+from django.db import IntegrityError
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import empty
@@ -373,6 +375,17 @@ def test_standard_reverse_prefetch_is_reused(django_assert_num_queries: Any) -> 
     with django_assert_num_queries(2):
         loaded = CustomField.objects.prefetch_related("values").get(pk=field.pk)
         assert loaded.serializer_field.run_validation(choice.id) == choice
+
+
+def test_external_label_unique_only_within_field_and_nonblank() -> None:
+    field = CustomFieldFactory(choice_field=True)
+    CustomValueFactory(field=field, external_label="")
+    CustomValueFactory(field=field, external_label="")
+    CustomValueFactory(field=field, external_label="token")
+    other = CustomFieldFactory(identifier="other", choice_field=True)
+    CustomValueFactory(field=other, external_label="token")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        CustomValueFactory(field=field, external_label="token")
 
 
 @pytest.mark.parametrize("multiple", [False, True])

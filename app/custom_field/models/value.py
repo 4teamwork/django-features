@@ -14,6 +14,13 @@ class CustomValue(AbstractBaseCustomValue):
     )
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["field", "external_label"],
+                condition=~models.Q(external_label=""),
+                name="custom_value_field_external_label_unique",
+            )
+        ]
         ordering = ["order", "created"]
         verbose_name = _("Benutzerdefinierter Wert")
         verbose_name_plural = _("Benutzerdefinierte Werte")
