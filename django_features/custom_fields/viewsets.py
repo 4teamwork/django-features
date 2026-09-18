@@ -7,7 +7,7 @@ from django_features.custom_fields.models.field import AbstractBaseCustomField
 
 
 class CustomFieldViewSet(ReadOnlyModelViewSet):
-    queryset = get_custom_field_model().objects.all()
+    queryset = get_custom_field_model().objects.with_choices()
     serializer_class = serializers.CustomFieldSerializer
 
     valid_content_type_filter_fields = ["app_label", "model"]

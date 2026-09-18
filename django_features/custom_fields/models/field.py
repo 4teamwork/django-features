@@ -27,6 +27,19 @@ def warn_invalid_default(field: "AbstractBaseCustomField") -> None:
 
 
 class CustomFieldQuerySet(models.QuerySet):
+    def with_choices(self) -> "CustomFieldQuerySet":
+        from django_features.custom_fields.helpers import get_custom_value_model
+
+        value_model = get_custom_value_model()
+        accessor = value_model._meta.get_field("field").remote_field.get_accessor_name()
+        return self.prefetch_related(
+            models.Prefetch(
+                accessor,
+                queryset=value_model.objects.filter(field__choice_field=True),
+                to_attr="_prefetched_choices",
+            )
+        )
+
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
             content_type__app_label=model._meta.app_label,
@@ -146,12 +159,20 @@ class AbstractBaseCustomField(TimeStampedModel):
         return f"{self.label}"
 
     @property
-    def choices(self) -> CustomValueQuerySet:
+    def choices(self) -> CustomValueQuerySet | list:
         from django_features.custom_fields.helpers import get_custom_value_model
 
         custom_value_model = get_custom_value_model()
-        if not self.choice_field:
+        if not self.choice_field or self.pk is None:
             return custom_value_model.objects.none()
+        if hasattr(self, "_prefetched_choices"):
+            return self._prefetched_choices
+        accessor = custom_value_model._meta.get_field(
+            "field"
+        ).remote_field.get_accessor_name()
+        cache = getattr(self, "_prefetched_objects_cache", {})
+        if accessor in cache:
+            return cache[accessor]
         return custom_value_model.objects.filter(field=self)
 
     @property

@@ -154,6 +154,154 @@ def test_ambiguous_choices_and_type_aware_values(multiple: bool) -> None:
     assert error.value.get_codes() == ["ambiguous"]
 
 
+@pytest.mark.parametrize("number", [1, 12])
+def test_prefetched_metadata_validation_budget(
+    number: int, django_assert_num_queries: Any
+) -> None:
+    ContentType.objects.get_for_model(Person)
+    for index in range(number):
+        field = CustomFieldFactory(
+            identifier=f"choice_{index}", choice_field=True, multiple=True
+        )
+        for item in range(4):
+            CustomValueFactory(field=field, value=str(item))
+    with django_assert_num_queries(2):
+        fields = list(CustomField.objects.for_model(Person).with_choices())
+        assert len(CustomFieldSerializer(fields, many=True).data) == number
+        serializer = PersonSerializer(custom_fields=fields)
+        for field in fields:
+            choices = list(field.choices)
+            assert (
+                len(
+                    serializer.fields[field.identifier].run_validation(
+                        [choice.id for choice in choices]
+                    )
+                )
+                == 4
+            )
+    with django_assert_num_queries(1):
+        assert len(PersonSerializer().fields) >= number
+
+
+@pytest.mark.parametrize("number", [1, 12])
+@pytest.mark.parametrize("shape", ["single", "many", "nested", "nested_many"])
+def test_input_prefetches_choices_with_bounded_queries(
+    number: int, shape: str, django_assert_num_queries: Any
+) -> None:
+    ContentType.objects.get_for_model(Person)
+    data: dict[str, Any] = {"firstname": "Example"}
+    selected = {}
+    for index in range(number):
+        field = CustomFieldFactory(identifier=f"choice_{index}", choice_field=True)
+        choice = CustomValueFactory(field=field)
+        data[field.identifier] = choice.pk
+        selected[field.identifier] = choice
+    many = shape in {"many", "nested_many"}
+    payload = [data, data] if many else data
+    with django_assert_num_queries(2):
+        if shape.startswith("nested"):
+
+            class ParentSerializer(serializers.Serializer):
+                person = PersonSerializer(many=many)
+
+            serializer = ParentSerializer(data={"person": payload})
+            child = serializer.fields["person"]
+            assert not hasattr(child.child if many else child, "initial_data")
+        else:
+            serializer = PersonSerializer(data=payload, many=many)
+        assert serializer.is_valid(), serializer.errors
+    validated = serializer.validated_data
+    if shape.startswith("nested"):
+        validated = validated["person"]
+    for item in validated if many else [validated]:
+        assert all(item[key] == choice for key, choice in selected.items())
+
+
+@pytest.mark.parametrize("shape", ["single", "many", "nested", "nested_many"])
+@pytest.mark.parametrize("multiple", [False, True])
+def test_reads_do_not_load_unused_choice_catalogs(
+    shape: str, multiple: bool, django_assert_num_queries: Any
+) -> None:
+    ContentType.objects.get_for_model(Person)
+    field = CustomFieldFactory(choice_field=True, multiple=multiple)
+    CustomValueFactory.create_batch(40, field=field, value="unused")
+    people = []
+    expected_people = []
+    for index in range(2):
+        selected = CustomValueFactory(field=field, value=f"selected-{index}")
+        person = Person.objects.create(firstname=f"Example {index}")
+        person.custom_values.add(selected)
+        # Fetch selected model values separately from serializer definitions
+        # and the unused choice catalog.
+        people.append(Person.objects.get(pk=person.pk))
+        choice = {"id": selected.pk, "label": selected.label, "value": selected.value}
+        expected_people.append(
+            {
+                "firstname": person.firstname,
+                "lastname": None,
+                "email": None,
+                field.identifier: [choice] if multiple else choice,
+            }
+        )
+    many = shape in {"many", "nested_many"}
+    instance = people if many else people[0]
+    expected = expected_people if many else expected_people[0]
+    for _ in range(3):
+        with django_assert_num_queries(1) as queries:
+            if shape.startswith("nested"):
+
+                class ParentSerializer(serializers.Serializer):
+                    person = PersonSerializer(many=many)
+
+                serializer = ParentSerializer({"person": instance})
+                expected_data = {"person": expected}
+            else:
+                serializer = PersonSerializer(instance, many=many)
+                expected_data = expected
+            assert serializer.data == expected_data
+        assert CustomValue._meta.db_table not in queries.captured_queries[0]["sql"]
+
+
+@pytest.mark.parametrize("many", [False, True])
+def test_read_only_child_does_not_prefetch_choices_for_write_response(
+    many: bool, django_assert_num_queries: Any
+) -> None:
+    field = CustomFieldFactory(choice_field=True)
+    selected = CustomValueFactory(field=field, value="selected")
+    CustomValueFactory.create_batch(40, field=field, value="unused")
+    person = Person.objects.create(firstname="Example")
+    person.custom_values.add(selected)
+    person = Person.objects.get(pk=person.pk)
+
+    class ParentSerializer(serializers.Serializer):
+        person = PersonSerializer(many=many, read_only=True)
+
+    expected = {
+        "firstname": "Example",
+        "lastname": None,
+        "email": None,
+        field.identifier: {
+            "id": selected.pk,
+            "label": selected.label,
+            "value": "selected",
+        },
+    }
+    with django_assert_num_queries(1) as queries:
+        serializer = ParentSerializer({"person": [person] if many else person}, data={})
+        assert serializer.is_valid(), serializer.errors
+        assert serializer.validated_data == {}
+        assert serializer.data == {"person": [expected] if many else expected}
+    assert CustomValue._meta.db_table not in queries.captured_queries[0]["sql"]
+
+
+def test_standard_reverse_prefetch_is_reused(django_assert_num_queries: Any) -> None:
+    field = CustomFieldFactory(choice_field=True)
+    choice = CustomValueFactory(field=field)
+    with django_assert_num_queries(2):
+        loaded = CustomField.objects.prefetch_related("values").get(pk=field.pk)
+        assert loaded.serializer_field.run_validation(choice.id) == choice
+
+
 @pytest.mark.parametrize("multiple", [False, True])
 @pytest.mark.parametrize("unique_field", ["value", "label"])
 @pytest.mark.parametrize("value", [{"nested": [1]}, [1, "one"]])
