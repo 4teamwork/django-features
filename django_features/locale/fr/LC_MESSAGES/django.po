@@ -189,3 +189,11 @@ msgstr "Message système"
 #: django_features/system_message/models.py
 msgid "Systemmeldungen"
 msgstr "Messages système"
+
+#: django_features/custom_fields/models/field.py
+msgid "The default does not satisfy the field rules."
+msgstr "La valeur par défaut ne respecte pas les règles du champ."
+
+#: django_features/custom_fields/models/field.py
+msgid "Select a supported field type."
+msgstr "Sélectionnez un type de champ pris en charge."

@@ -82,3 +82,23 @@ class CustomFieldViewSetTest(APITestCase):
                     for choice in field["choices"]
                 )
             )
+
+    def test_choice_metadata_preserves_valid_defaults_and_loads_choices_once(
+        self,
+    ) -> None:
+        from django_features.custom_fields.serializers import CustomFieldSerializer
+
+        for multiple, empty in [(False, False), (True, False), (True, True)]:
+            field = CustomFieldFactory(
+                identifier=f"default_{multiple}_{empty}",
+                choice_field=True,
+                multiple=multiple,
+            )
+            choice = CustomValueFactory(field=field, value="valid")
+            field.default = ([] if empty else [choice.pk]) if multiple else choice.pk
+            field.save()
+            with self.assertNumQueries(1):
+                metadata = CustomFieldSerializer(field).data
+            self.assertEqual(field.default, metadata["default"])
+            self.assertEqual([choice.pk], [item["id"] for item in metadata["choices"]])
+            self.assertFalse(hasattr(field, "_prefetched_choices"))

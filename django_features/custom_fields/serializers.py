@@ -32,6 +32,10 @@ class CustomFieldSerializer(serializers.ModelSerializer):
     class Meta:
         model = get_custom_field_model()
         fields = [
+            "required",
+            "allow_null",
+            "allow_blank",
+            "default",
             "choice_field",
             "choices",
             "created",

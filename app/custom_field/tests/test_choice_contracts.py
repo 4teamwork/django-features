@@ -154,6 +154,27 @@ def test_ambiguous_choices_and_type_aware_values(multiple: bool) -> None:
     assert error.value.get_codes() == ["ambiguous"]
 
 
+@pytest.mark.parametrize(
+    "field_type,default,multiple",
+    [
+        ("INTEGER", [], False),
+        ("CHAR", "text", True),
+        ("CHAR", [], True),
+    ],
+)
+def test_invalid_default_configuration(
+    field_type: str, default: Any, multiple: bool
+) -> None:
+    field = CustomFieldFactory(
+        field_type=field_type, default=default, multiple=multiple, allow_blank=False
+    )
+    from django.core.exceptions import ValidationError as ConfigurationError
+
+    with pytest.raises(ConfigurationError) as caught:
+        field.clean()
+    assert "default" in caught.value.message_dict
+
+
 @pytest.mark.parametrize("number", [1, 12])
 def test_prefetched_metadata_validation_budget(
     number: int, django_assert_num_queries: Any
@@ -346,6 +367,20 @@ def test_invalid_supplied_collection_never_leaves_a_partial_index(
         with pytest.raises(ValidationError) as error:
             serializer.run_validation([own.id] if multiple else own.id)
         assert error.value.get_codes() == ["invalid"]
+
+
+@pytest.mark.parametrize("field_type", ["CHAR", "INTEGER", "BOOLEAN", "DATE"])
+def test_scalar_list_child_and_container_rules(field_type: str) -> None:
+    field = CustomFieldFactory(
+        field_type=field_type, multiple=True, allow_blank=False, allow_null=False
+    )
+    for data, code in [(None, "null"), ([], "empty"), ("wrong-shape", "not_a_list")]:
+        with pytest.raises(ValidationError) as error:
+            field.serializer_field.run_validation(data)
+        assert error.value.get_codes() == [code]
+    with pytest.raises(ValidationError) as error:
+        field.serializer_field.run_validation([None])
+    assert error.value.get_codes() == {0: ["null"]}
 
 
 @pytest.mark.parametrize("unique_field", ["id", "pk"])
