@@ -1,6 +1,12 @@
+import logging
+from copy import deepcopy
+from functools import partial
+from typing import Any
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
@@ -9,7 +15,43 @@ from rest_framework import serializers
 from django_features.custom_fields.models.value import CustomValueQuerySet
 
 
+logger = logging.getLogger("django_features.custom_fields")
+
+
+class CustomFieldCreateOnlyDefault(serializers.CreateOnlyDefault):
+    def __call__(self, serializer_field: serializers.Field) -> Any:
+        # Standalone model-provided fields remain usable for creation validation.
+        if serializer_field.parent is None:
+            return self.default() if callable(self.default) else self.default
+        return super().__call__(serializer_field)
+
+
+def warn_invalid_default(field: "AbstractBaseCustomField") -> None:
+    # Configuration may contain personal data: never include values or exceptions.
+    logger.warning(
+        "Ignoring invalid custom field default configuration.",
+        extra={
+            "custom_field_model": field._meta.label_lower,
+            "custom_field_pk": field.pk,
+            "code": "invalid_custom_field_default",
+        },
+    )
+
+
 class CustomFieldQuerySet(models.QuerySet):
+    def with_choices(self) -> "CustomFieldQuerySet":
+        from django_features.custom_fields.helpers import get_custom_value_model
+
+        value_model = get_custom_value_model()
+        accessor = value_model._meta.get_field("field").remote_field.get_accessor_name()
+        return self.prefetch_related(
+            models.Prefetch(
+                accessor,
+                queryset=value_model.objects.filter(field__choice_field=True),
+                to_attr="_prefetched_choices",
+            )
+        )
+
     def for_model(self, model: type[models.Model]) -> "CustomFieldQuerySet":
         return self.select_related("content_type").filter(
             content_type__app_label=model._meta.app_label,
@@ -129,12 +171,20 @@ class AbstractBaseCustomField(TimeStampedModel):
         return f"{self.label}"
 
     @property
-    def choices(self) -> CustomValueQuerySet:
+    def choices(self) -> CustomValueQuerySet | list:
         from django_features.custom_fields.helpers import get_custom_value_model
 
         custom_value_model = get_custom_value_model()
-        if not self.choice_field:
+        if not self.choice_field or self.pk is None:
             return custom_value_model.objects.none()
+        if hasattr(self, "_prefetched_choices"):
+            return self._prefetched_choices
+        accessor = custom_value_model._meta.get_field(
+            "field"
+        ).remote_field.get_accessor_name()
+        cache = getattr(self, "_prefetched_objects_cache", {})
+        if accessor in cache:
+            return cache[accessor]
         return custom_value_model.objects.filter(field=self)
 
     @property
@@ -156,30 +206,68 @@ class AbstractBaseCustomField(TimeStampedModel):
 
     @property
     def serializer_field(self) -> serializers.Field:
+        result = self._serializer_field()
+        if self.default is not None and not self.required:
+            if self.choice_field:
+                result.default = CustomFieldCreateOnlyDefault(self.default)
+            else:
+                try:
+                    result.default = CustomFieldCreateOnlyDefault(
+                        partial(deepcopy, result.run_validation(self.default))
+                    )
+                except serializers.ValidationError:
+                    warn_invalid_default(self)
+        return result
+
+    def validate_default(
+        self, *, choices: Any = None, validate_choices: bool = True
+    ) -> Any:
+        """Validate configured defaults strictly, including defaults on required fields."""
+        if self.default is None or (self.choice_field and not validate_choices):
+            return None
+        if self.field_type not in self.TYPE_SERIALIZER_MAP:
+            raise ValidationError({"field_type": _("Select a supported field type.")})
+        if choices is not None:
+            # Pending inline additions have no canonical ID until they are saved.
+            # They still participate in the caller's mapping/duplicate validation.
+            choices = [choice for choice in choices if choice.pk is not None]
+        try:
+            return self._serializer_field(choices=choices).run_validation(self.default)
+        except serializers.ValidationError as exc:
+            raise ValidationError(
+                {"default": _("The default does not satisfy the field rules.")}
+            ) from exc
+
+    def clean(self, *, validate_choices: bool = True) -> None:
+        super().clean()
+        self.validate_default(validate_choices=validate_choices)
+
+    def _serializer_field(self, *, choices: Any = None) -> serializers.Field:
         from django_features.custom_fields.fields import ChoiceIdField
 
-        params = {"allow_null": self.allow_null, "required": self.required}
+        params: dict[str, Any] = {
+            "allow_null": self.allow_null,
+            "required": self.required,
+        }
         if self.choice_field:
-            return ChoiceIdField(field=self, **params)
+            return ChoiceIdField(field=self, choices=choices, **params)
 
         serializer_field = self.TYPE_SERIALIZER_MAP.get(self.field_type)
         if serializer_field is None:
             raise ValueError(f"Unknown field type: {self.field_type}")
 
+        child_params = {"allow_null": self.allow_null}
         if self.field_type in self.BLANK_TYPES:
-            params["allow_blank"] = self.allow_blank
-
-        if self.default and not self.required:
-            params.pop("required")
-            params["default"] = self.default
-
+            child_params["allow_blank"] = self.allow_blank
         if self.multiple:
-            return serializers.ListField(
-                child=serializer_field(**params),
-                **{"allow_empty": self.allow_blank, **params},
+            result = serializers.ListField(
+                child=serializer_field(**child_params),
+                allow_empty=self.allow_blank,
+                **params,
             )
-
-        return serializer_field(**params)
+        else:
+            result = serializer_field(**{**params, **child_params})
+        return result
 
     @property
     def sql_field(self) -> str:

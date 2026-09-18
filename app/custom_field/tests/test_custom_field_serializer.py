@@ -19,6 +19,10 @@ class CustomFieldViewSetTest(APITestCase):
         data = CustomFieldSerializer(self.choice_field).data
         self.assertDictEqual(
             {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+                "default": None,
                 "choice_field": False,
                 "choices": [],
                 "created": ANY,
@@ -62,6 +66,10 @@ class CustomFieldViewSetTest(APITestCase):
         data = CustomFieldSerializer(self.choice_field).data
         self.assertDictEqual(
             {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+                "default": None,
                 "choice_field": True,
                 "choices": [
                     {
