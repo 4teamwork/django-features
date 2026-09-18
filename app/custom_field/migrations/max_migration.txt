@@ -1,1 +1,1 @@
-0001_inherit_from_custom_base_model
+0002_add_external_label_constraint
