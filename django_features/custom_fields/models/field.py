@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
@@ -7,6 +9,21 @@ from django_extensions.db.models import TimeStampedModel
 from rest_framework import serializers
 
 from django_features.custom_fields.models.value import CustomValueQuerySet
+
+
+logger = logging.getLogger("django_features.custom_fields")
+
+
+def warn_invalid_default(field: "AbstractBaseCustomField") -> None:
+    # Configuration may contain personal data: never include values or exceptions.
+    logger.warning(
+        "Ignoring invalid custom field default configuration.",
+        extra={
+            "custom_field_model": field._meta.label_lower,
+            "custom_field_pk": field.pk,
+            "code": "invalid_custom_field_default",
+        },
+    )
 
 
 class CustomFieldQuerySet(models.QuerySet):

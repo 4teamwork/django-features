@@ -334,3 +334,44 @@ class MappingSerializerTestCase(APITestCase):
                 },
             ],
         )
+
+    @override_config(MODEL_MAPPING_FIELD=MODEL_MAPPING_FIELD)
+    def test_configured_value_dictionary_and_id_fallback(self) -> None:
+        for key in ["value", "id"]:
+            serializer = PersonMappingSerializer(
+                data={
+                    "external_firstname": "Test",
+                    "external_lastname": "Person",
+                    "external_choice_field": {key: self.choice_1.value},
+                    "external_multiple_choice_field": [
+                        {key: self.multiple_choice_2.value},
+                        self.multiple_choice_1.value,
+                    ],
+                }
+            )
+            self.assertTrue(serializer.is_valid(raise_exception=True))
+            self.assertEqual(serializer.validated_data["choice_value"], self.choice_1)
+            self.assertEqual(
+                list(serializer.validated_data["multiple_choice_value"]),
+                [self.multiple_choice_1, self.multiple_choice_2],
+            )
+
+    @override_config(MODEL_MAPPING_FIELD=MODEL_MAPPING_FIELD)
+    def test_invalid_choice_list_does_not_write_partial_mapping(self) -> None:
+        before = Person.objects.count()
+        for invalid in [{}, {"value": []}, {"id": {"nested": 1}}]:
+            serializer = PersonMappingSerializer(
+                data={
+                    "external_firstname": "Test",
+                    "external_lastname": "Person",
+                    "external_multiple_choice_field": [
+                        {"value": self.multiple_choice_1.value},
+                        invalid,
+                    ],
+                }
+            )
+            self.assertFalse(serializer.is_valid())
+            self.assertEqual(
+                serializer.errors["multiple_choice_value"][0].code, "invalid"
+            )
+            self.assertEqual(Person.objects.count(), before)
