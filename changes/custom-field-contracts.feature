@@ -1,0 +1,1 @@
+Every concrete custom-value model requires an `AddField` migration for the new, untranslated `external_label` field; see the [README upgrade guide](README.md#custom-field-upgrade). Add `ChoiceMatcher` for exact matching of external tokens against a choice's label, value or external label.
