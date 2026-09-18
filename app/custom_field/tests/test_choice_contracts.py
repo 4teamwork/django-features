@@ -5,6 +5,7 @@ import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError
 from django.db import transaction
+from django.utils.translation import override
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import empty
@@ -16,6 +17,8 @@ from app.custom_field.tests.factories import CustomValueFactory
 from app.models import Person
 from app.serializers.person import PersonSerializer
 from django_features.custom_fields.fields import ChoiceIdField
+from django_features.custom_fields.matching import ChoiceMatcher
+from django_features.custom_fields.matching import ChoiceMatchError
 from django_features.custom_fields.serializers import CustomFieldSerializer
 
 
@@ -224,8 +227,82 @@ def test_choice_defaults_are_validated_objects(django_assert_num_queries: Any) -
     assert normalize_pk.call_count == 3
 
 
+def test_matching_explicit_language_and_untranslated_metadata(
+    django_assert_num_queries: Any,
+) -> None:
+    field = CustomFieldFactory(choice_field=True)
+    choice = CustomValueFactory(
+        field=field,
+        value="token",
+        label_de="Rot",
+        label_fr="Rouge",
+        external_label="external",
+    )
+    with django_assert_num_queries(0), override("fr"):
+        assert (
+            ChoiceMatcher([choice], attribute="label", language="de").resolve("Rot")
+            is choice
+        )
+        assert (
+            ChoiceMatcher([choice], attribute="label", language="fr").resolve("Rouge")
+            is choice
+        )
+        assert ChoiceMatcher([choice], attribute="value").resolve("token") is choice
+        assert (
+            ChoiceMatcher([choice], attribute="external_label").resolve("external")
+            is choice
+        )
+        with pytest.raises(ChoiceMatchError) as error:
+            ChoiceMatcher([choice], attribute="label", language="en").resolve("Rot")
+        assert error.value.get_codes() == ["missing"]
+    choice.refresh_from_db()
+    assert choice.external_label == "external"
+    assert choice.value == "token"
+    assert not any(
+        field.name.startswith("external_label_") for field in CustomValue._meta.fields
+    )
+
+
+def test_matcher_errors_and_normalization() -> None:
+    field = CustomFieldFactory(choice_field=True)
+    one = CustomValueFactory(field=field, value=" token ")
+    two = CustomValueFactory(field=field, value="token")
+    with pytest.raises(ChoiceMatchError) as error:
+        ChoiceMatcher([one, two], attribute="value", normalize=str.strip)
+    assert error.value.get_codes() == ["ambiguous"]
+    matcher = ChoiceMatcher([two], attribute="value")
+    for token, code in [
+        ("missing", "missing"),
+        (" token ", "missing"),
+        ("TOKEN", "missing"),
+        (1, "missing"),
+        ({}, "type_mismatch"),
+    ]:
+        with pytest.raises(ChoiceMatchError) as error:
+            matcher.resolve(token)
+        assert error.value.get_codes() == [code]
+    assert matcher.resolve_many(["token", "token"]) == [two, two]
+    for attribute, language in [
+        ("id", None),
+        ([], None),
+        ("label", None),
+        ("label", ""),
+        ("label", "xx"),
+        ("value", "de"),
+    ]:
+        with pytest.raises(ValueError):
+            ChoiceMatcher([one], attribute=attribute, language=language)
+    normalized = ChoiceMatcher([one], attribute="value", normalize=str.strip)
+    assert normalized.resolve(" token ") is one
+    assert one.value == " token "
+    one.value = {}
+    with pytest.raises(ChoiceMatchError) as error:
+        ChoiceMatcher([one], attribute="value")
+    assert error.value.get_codes() == ["type_mismatch"]
+
+
 @pytest.mark.parametrize("number", [1, 12])
-def test_prefetched_metadata_validation_budget(
+def test_prefetched_metadata_validation_and_matching_budget(
     number: int, django_assert_num_queries: Any
 ) -> None:
     ContentType.objects.get_for_model(Person)
@@ -248,6 +325,10 @@ def test_prefetched_metadata_validation_budget(
                     )
                 )
                 == 4
+            )
+            matcher = ChoiceMatcher(field.choices, attribute="value")
+            assert (
+                len(matcher.resolve_many([str(item % 4) for item in range(100)])) == 100
             )
     with django_assert_num_queries(1):
         assert len(PersonSerializer().fields) >= number
@@ -544,3 +625,13 @@ def test_concrete_datetime_lookup_accepts_native_values() -> None:
     assert validator.run_validation(choice.created) == choice
     assert validator.run_validation({"created": choice.created}) == choice
     assert validator.run_validation(choice.created.isoformat()) == choice
+
+
+def test_blank_external_labels_are_literal_keys() -> None:
+    field = CustomFieldFactory(choice_field=True)
+    first = CustomValueFactory(field=field)
+    second = CustomValueFactory(field=field)
+    assert ChoiceMatcher([first], attribute="external_label").resolve("") == first
+    with pytest.raises(ChoiceMatchError) as error:
+        ChoiceMatcher([first, second], attribute="external_label")
+    assert error.value.get_codes() == ["ambiguous"]
