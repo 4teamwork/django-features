@@ -485,6 +485,11 @@ def test_unknown_scalar_type_is_a_configuration_error() -> None:
     "language,default_error,type_error",
     [
         (
+            "en",
+            "The default does not satisfy the field rules.",
+            "Select a supported field type.",
+        ),
+        (
             "de",
             "Der Standardwert entspricht nicht den Feldregeln.",
             "Wählen Sie einen unterstützten Feldtyp.",

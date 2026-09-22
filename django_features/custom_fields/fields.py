@@ -3,6 +3,7 @@ from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.utils.model_meta import get_field_info
 
@@ -15,14 +16,16 @@ from django_features.custom_fields.serializers import CustomChoiceSerializer
 
 class ChoiceIdField(serializers.Field):
     default_error_messages = {
-        "shape": "Expected a list for multiple choices or a scalar for a single choice.",
-        "invalid": "Invalid choice lookup value.",
-        "missing": "A selected choice does not exist in this field.",
-        "duplicate": "A choice may only be selected once.",
-        "ambiguous": "More than one choice matches the lookup value.",
-        "empty": "This list may not be empty.",
-        "blank": "This field may not be blank.",
-        "not_choice": "This field is not a choice field.",
+        "shape": _(
+            "Für eine Mehrfachauswahl wird eine Liste erwartet, für eine Einfachauswahl ein einzelner Wert."
+        ),
+        "invalid": _("Ungültiger Suchwert für die Auswahl."),
+        "missing": _("Eine ausgewählte Option existiert nicht in diesem Feld."),
+        "duplicate": _("Eine Option darf nur einmal ausgewählt werden."),
+        "ambiguous": _("Mehrere Optionen entsprechen dem Suchwert."),
+        "empty": _("Diese Liste darf nicht leer sein."),
+        "blank": _("Dieses Feld darf nicht leer sein."),
+        "not_choice": _("Dieses Feld ist kein Auswahlfeld."),
     }
 
     def __init__(

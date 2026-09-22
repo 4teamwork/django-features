@@ -390,6 +390,73 @@ def test_structured_lookup_values_are_invalid(
     assert error.value.get_codes() == ["invalid"]
 
 
+@pytest.mark.parametrize(
+    "code,german,english,french",
+    [
+        (
+            "shape",
+            "Für eine Mehrfachauswahl wird eine Liste erwartet, für eine Einfachauswahl ein einzelner Wert.",
+            "Expected a list for multiple choices or a scalar for a single choice.",
+            "Une liste est attendue pour une sélection multiple, ou une valeur unique pour une sélection simple.",
+        ),
+        (
+            "invalid",
+            "Ungültiger Suchwert für die Auswahl.",
+            "Invalid choice lookup value.",
+            "Valeur de recherche de choix invalide.",
+        ),
+        (
+            "missing",
+            "Eine ausgewählte Option existiert nicht in diesem Feld.",
+            "A selected choice does not exist in this field.",
+            "Une option sélectionnée n'existe pas dans ce champ.",
+        ),
+        (
+            "duplicate",
+            "Eine Option darf nur einmal ausgewählt werden.",
+            "A choice may only be selected once.",
+            "Une option ne peut être sélectionnée qu'une seule fois.",
+        ),
+        (
+            "ambiguous",
+            "Mehrere Optionen entsprechen dem Suchwert.",
+            "More than one choice matches the lookup value.",
+            "Plusieurs options correspondent à la valeur recherchée.",
+        ),
+        (
+            "empty",
+            "Diese Liste darf nicht leer sein.",
+            "This list may not be empty.",
+            "Cette liste ne peut pas être vide.",
+        ),
+        (
+            "blank",
+            "Dieses Feld darf nicht leer sein.",
+            "This field may not be blank.",
+            "Ce champ ne peut pas être vide.",
+        ),
+        (
+            "not_choice",
+            "Dieses Feld ist kein Auswahlfeld.",
+            "This field is not a choice field.",
+            "Ce champ n'est pas un champ de sélection.",
+        ),
+    ],
+)
+def test_choice_errors_are_localized(
+    code: str, german: str, english: str, french: str
+) -> None:
+    from django.utils.translation import override
+
+    # Reuse a field created before selecting a language to verify lazy translation.
+    validator = ChoiceIdField(CustomFieldFactory(choice_field=True))
+    for language, message in (("de", german), ("en", english), ("fr", french)):
+        with override(language), pytest.raises(ValidationError) as caught:
+            validator.fail(code)
+        assert caught.value.get_codes() == [code]
+        assert str(caught.value.detail[0]) == message
+
+
 def test_configured_concrete_field_preserves_database_conversion() -> None:
     field = CustomFieldFactory(choice_field=True)
     choice = CustomValueFactory(field=field, order=10)

@@ -230,7 +230,9 @@ class AbstractBaseCustomField(TimeStampedModel):
         if self.default is None or (self.choice_field and not validate_choices):
             return None
         if self.field_type not in self.TYPE_SERIALIZER_MAP:
-            raise ValidationError({"field_type": _("Select a supported field type.")})
+            raise ValidationError(
+                {"field_type": _("Wählen Sie einen unterstützten Feldtyp.")}
+            )
         if choices is not None:
             # Pending inline additions have no canonical ID until they are saved.
             # They still participate in the caller's mapping/duplicate validation.
@@ -239,7 +241,7 @@ class AbstractBaseCustomField(TimeStampedModel):
             return self._serializer_field(choices=choices).run_validation(self.default)
         except serializers.ValidationError as exc:
             raise ValidationError(
-                {"default": _("The default does not satisfy the field rules.")}
+                {"default": _("Der Standardwert entspricht nicht den Feldregeln.")}
             ) from exc
 
     def clean(self, *, validate_choices: bool = True) -> None:

@@ -48,6 +48,38 @@ msgstr ""
 msgid "Französisch"
 msgstr ""
 
+#: django_features/custom_fields/fields.py
+msgid "Für eine Mehrfachauswahl wird eine Liste erwartet, für eine Einfachauswahl ein einzelner Wert."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Ungültiger Suchwert für die Auswahl."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Eine ausgewählte Option existiert nicht in diesem Feld."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Eine Option darf nur einmal ausgewählt werden."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Mehrere Optionen entsprechen dem Suchwert."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Diese Liste darf nicht leer sein."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Dieses Feld darf nicht leer sein."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Dieses Feld ist kein Auswahlfeld."
+msgstr ""
+
 #: django_features/custom_fields/models/field.py
 msgid "Text (einzeilig)"
 msgstr ""
@@ -128,12 +160,12 @@ msgid "Erforderlich"
 msgstr ""
 
 #: django_features/custom_fields/models/field.py
-msgid "Select a supported field type."
-msgstr "Wählen Sie einen unterstützten Feldtyp."
+msgid "Wählen Sie einen unterstützten Feldtyp."
+msgstr ""
 
 #: django_features/custom_fields/models/field.py
-msgid "The default does not satisfy the field rules."
-msgstr "Der Standardwert entspricht nicht den Feldregeln."
+msgid "Der Standardwert entspricht nicht den Feldregeln."
+msgstr ""
 
 #: django_features/custom_fields/models/value.py
 msgid "Label"
