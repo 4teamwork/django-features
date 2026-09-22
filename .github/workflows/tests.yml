@@ -42,13 +42,5 @@ jobs:
         run: poetry run flake8
       - name: black
         run: poetry run black --check --config pyproject.toml .
-      - name: Install gettext
-        run: |
-          if ! command -v msgfmt >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y gettext
-          fi
-      - name: Compile translations
-        run: DJANGO_CONFIGURATION=Testing poetry run python manage.py compilemessages --ignore .venv --ignore venv --ignore lib
       - name: test
         run: DJANGO_CONFIGURATION=Testing poetry run pytest

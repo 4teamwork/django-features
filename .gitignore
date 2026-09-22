@@ -71,6 +71,7 @@ pytestdebug.log
 
 # Translations
 *.mo
+!django_features/locale/*/LC_MESSAGES/*.mo
 
 # Django stuff:
 
