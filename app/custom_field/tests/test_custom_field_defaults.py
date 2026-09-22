@@ -134,7 +134,7 @@ def test_create_defaults_keep_bulk_storage_and_bounded_field_queries(
             identifier=f"custom_{index}", field_type="CHAR", multiple=True, default=[]
         )
     serializer = PersonSerializer(data={"firstname": "Bulk", "lastname": "Person"})
-    with django_assert_num_queries(2):
+    with django_assert_num_queries(1):
         assert serializer.is_valid(), serializer.errors
     with patch.object(
         CustomValue.objects, "bulk_create", wraps=CustomValue.objects.bulk_create

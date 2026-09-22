@@ -251,12 +251,15 @@ def test_prefetched_metadata_validation_budget(
         assert len(PersonSerializer().fields) >= number
 
 
-@pytest.mark.parametrize("number", [1, 12])
+@pytest.mark.parametrize("number", [0, 1, 12])
 @pytest.mark.parametrize("shape", ["single", "many", "nested", "nested_many"])
-def test_input_prefetches_choices_with_bounded_queries(
-    number: int, shape: str, django_assert_num_queries: Any
+@pytest.mark.parametrize("partial", [False, True])
+def test_input_loads_only_used_choice_catalogs(
+    number: int, shape: str, partial: bool, django_assert_num_queries: Any
 ) -> None:
     ContentType.objects.get_for_model(Person)
+    unused = CustomFieldFactory(identifier="unused_choice", choice_field=True)
+    CustomValueFactory.create_batch(40, field=unused)
     data: dict[str, Any] = {"firstname": "Example"}
     selected = {}
     for index in range(number):
@@ -266,22 +269,24 @@ def test_input_prefetches_choices_with_bounded_queries(
         selected[field.identifier] = choice
     many = shape in {"many", "nested_many"}
     payload = [data, data] if many else data
-    with django_assert_num_queries(2):
+    # One metadata query and one catalog query per used field, reused across items.
+    with django_assert_num_queries(1 + number) as queries:
         if shape.startswith("nested"):
 
             class ParentSerializer(serializers.Serializer):
                 person = PersonSerializer(many=many)
 
-            serializer = ParentSerializer(data={"person": payload})
-            child = serializer.fields["person"]
-            assert not hasattr(child.child if many else child, "initial_data")
+            serializer = ParentSerializer(data={"person": payload}, partial=partial)
         else:
-            serializer = PersonSerializer(data=payload, many=many)
+            serializer = PersonSerializer(data=payload, many=many, partial=partial)
         assert serializer.is_valid(), serializer.errors
+    if number == 0:
+        assert CustomValue._meta.db_table not in queries.captured_queries[0]["sql"]
     validated = serializer.validated_data
     if shape.startswith("nested"):
         validated = validated["person"]
     for item in validated if many else [validated]:
+        assert unused.identifier not in item
         assert all(item[key] == choice for key, choice in selected.items())
 
 

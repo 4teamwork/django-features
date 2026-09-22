@@ -122,11 +122,6 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                 .objects.for_model(self.model)
                 .filter(**self.filter)
             )
-            # Nested serializers receive their input through the root serializer.
-            if not self.read_only and (
-                hasattr(self, "initial_data") or hasattr(self.root, "initial_data")
-            ):
-                custom_fields = custom_fields.with_choices()
         for field in custom_fields:
             serialized_field = field.serializer_field
             if field.choice_field:
