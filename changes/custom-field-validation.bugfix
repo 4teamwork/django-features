@@ -1,6 +1,8 @@
-Validate choice shapes, null/empty rules, duplicates, missing and ambiguous lookups without raw Python/ORM errors. Use configured-key dictionaries with id fallback for single and multiple choices; the configured key wins when both occur. Preserve typed scalar lookups, return ordering, and falsy scalar/list defaults; reject structured lookup values.
-Reject invalid configured defaults in model/admin validation; runtime serializers safely log and omit invalid defaults without rejecting explicit valid values or leaking bad defaults through metadata.
-Validate defaults against surviving persisted inline choices, retain strict validation when no inline runs, reuse metadata choice queries, and ship German/French validation catalogs.
-Apply configured custom-field defaults only on creation; omitted full-update fields preserve stored values and choice relations.
-Prefetch choice catalogs only for input validation, including nested and list serializers; read serializers load field definitions without fetching unused choices.
-Return fresh plain lists for multiple-choice input and defaults in catalog order without constructing QuerySets or modifying their private caches; remove the unused ChoiceIdField.get_queryset method.
+Custom-field validation and defaults:
+
+- Defaults are only applied on create. Full updates preserve stored values for omitted fields.
+- Falsy defaults (`0`, `False`, `""`, `[]`) are now applied.
+- Invalid defaults are rejected in model/admin validation and ignored at runtime with a log warning.
+- Invalid choice input returns validation errors instead of server errors.
+- The metadata endpoint now also returns `required`, `allow_null`, `allow_blank`, and the stored `default`.
+- Removed `ChoiceIdField.get_queryset`.
