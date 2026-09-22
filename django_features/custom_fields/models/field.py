@@ -1,6 +1,5 @@
 import logging
 from copy import deepcopy
-from functools import partial
 from typing import Any
 
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -211,12 +210,17 @@ class AbstractBaseCustomField(TimeStampedModel):
             if self.choice_field:
                 result.default = CustomFieldCreateOnlyDefault(self.default)
             else:
-                try:
-                    result.default = CustomFieldCreateOnlyDefault(
-                        partial(deepcopy, result.run_validation(self.default))
-                    )
-                except serializers.ValidationError:
-                    warn_invalid_default(self)
+
+                def get_default() -> Any:
+                    try:
+                        return deepcopy(result.run_validation(self.default))
+                    except serializers.ValidationError:
+                        # Skip subsequent defaults on this field without logging again.
+                        result.default = serializers.empty
+                        warn_invalid_default(self)
+                        raise serializers.SkipField() from None
+
+                result.default = CustomFieldCreateOnlyDefault(get_default)
         return result
 
     def validate_default(

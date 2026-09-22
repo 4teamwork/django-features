@@ -311,6 +311,8 @@ def test_invalid_scalar_defaults_skip_omission_but_preserve_explicit_validation(
     )
     data = {"firstname": "Default", "lastname": "Person"}
     serializer = PersonSerializer(data=[data] * 8, many=True)
+    assert "custom" in serializer.child.fields
+    assert caplog.records == []
     assert serializer.is_valid(), serializer.errors
     assert all("custom" not in row for row in serializer.validated_data)
     assert len(caplog.records) == 1
@@ -324,7 +326,7 @@ def test_invalid_scalar_defaults_skip_omission_but_preserve_explicit_validation(
     assert all(not person.custom_values.exists() for person in people)
     caplog.clear()
     assert len(PersonSerializer(Person.objects.all(), many=True).data) == 8
-    assert caplog.messages == ["Ignoring invalid custom field default configuration."]
+    assert caplog.records == []
     person = people[0]
     person.custom_values.add(CustomValueFactory(field=field, value=existing))
     for partial in (False, True):
@@ -333,12 +335,19 @@ def test_invalid_scalar_defaults_skip_omission_but_preserve_explicit_validation(
         assert "custom" not in serializer.validated_data
         serializer.save()
         assert person.custom_values.get(field=field).value == existing
+    serializer = PersonSerializer(data=data, partial=True)
+    assert serializer.is_valid(), serializer.errors
+    assert "custom" not in serializer.validated_data
+    serializer = PersonSerializer(data={**data, "custom": existing})
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["custom"] is not None
     serializer = PersonSerializer(data={**data, "custom": default})
     assert not serializer.is_valid()
     assert "custom" in serializer.errors
     # Re-fetching exercises annotated custom values used by runtime reads.
     assert PersonSerializer(Person.objects.get(pk=person.pk)).data["custom"] == existing
     assert PersonSerializer(Person.objects.get(pk=people[1].pk)).data["custom"] is None
+    assert caplog.records == []
 
 
 @pytest.mark.parametrize("multiple", [False, True])
