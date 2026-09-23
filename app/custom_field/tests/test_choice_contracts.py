@@ -267,9 +267,18 @@ def test_matcher_errors_and_normalization() -> None:
     field = CustomFieldFactory(choice_field=True)
     one = CustomValueFactory(field=field, value=" token ")
     two = CustomValueFactory(field=field, value="token")
+    unique = CustomValueFactory(field=field, value=" unique ")
+    blank = CustomValueFactory(field=field, value=" ")
+    matcher = ChoiceMatcher(
+        [one, two, unique, blank], attribute="value", normalize=str.strip
+    )
+    assert matcher.resolve("unique") is unique
     with pytest.raises(ChoiceMatchError) as error:
-        ChoiceMatcher([one, two], attribute="value", normalize=str.strip)
+        matcher.resolve(" token ")
     assert error.value.get_codes() == ["ambiguous"]
+    with pytest.raises(ChoiceMatchError) as error:
+        matcher.resolve(" ")
+    assert error.value.get_codes() == ["missing"]
     matcher = ChoiceMatcher([two], attribute="value")
     for token, code in [
         ("missing", "missing"),
@@ -627,11 +636,41 @@ def test_concrete_datetime_lookup_accepts_native_values() -> None:
     assert validator.run_validation(choice.created.isoformat()) == choice
 
 
-def test_blank_external_labels_are_literal_keys() -> None:
+@pytest.mark.parametrize(
+    "attribute,language,empty_key",
+    [
+        ("external_label", None, ""),
+        ("label", "de", None),
+        ("label", "de", ""),
+        ("value", None, None),
+        ("value", None, ""),
+    ],
+)
+def test_matcher_skips_empty_keys_and_limits_ambiguity_to_duplicates(
+    attribute: str, language: str | None, empty_key: Any
+) -> None:
     field = CustomFieldFactory(choice_field=True)
-    first = CustomValueFactory(field=field)
-    second = CustomValueFactory(field=field)
-    assert ChoiceMatcher([first], attribute="external_label").resolve("") == first
+    stored_attribute = "label_de" if attribute == "label" else attribute
+    choices = [
+        CustomValue(field=field, **{stored_attribute: key})
+        for key in [empty_key, empty_key, "duplicate", "unique", "duplicate"]
+    ]
+    matcher = ChoiceMatcher(choices, attribute=attribute, language=language)
+    assert matcher.resolve("unique") is choices[3]
+    assert matcher.resolve_many(["unique", "unique"]) == [choices[3], choices[3]]
+    for token in [None, "", "missing"]:
+        with pytest.raises(ChoiceMatchError) as error:
+            matcher.resolve(token)
+        assert error.value.get_codes() == ["missing"]
     with pytest.raises(ChoiceMatchError) as error:
-        ChoiceMatcher([first, second], attribute="external_label")
+        matcher.resolve("duplicate")
     assert error.value.get_codes() == ["ambiguous"]
+    with pytest.raises(ChoiceMatchError) as error:
+        matcher.resolve_many(["unique", "duplicate"])
+    assert error.value.get_codes() == ["ambiguous"]
+
+
+@pytest.mark.parametrize("value", [0, False])
+def test_matcher_preserves_nonempty_falsy_keys(value: Any) -> None:
+    choice = CustomValue(value=value)
+    assert ChoiceMatcher([choice], attribute="value").resolve(value) is choice

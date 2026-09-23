@@ -157,3 +157,7 @@ choice = matcher.resolve(external_token)
 Use `attribute="value"` or `attribute="external_label"` without `language` for
 untranslated matching. When loading several fields, use the custom-field
 queryset's `with_choices()` to prefetch their choices.
+
+Matching skips `None` and empty-string keys after normalization. Duplicate keys
+raise an ambiguous-match validation error only when resolved; unique keys remain
+matchable. Empty or unknown keys raise a missing-match validation error.

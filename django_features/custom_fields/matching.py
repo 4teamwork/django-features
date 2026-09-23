@@ -34,13 +34,14 @@ class ChoiceMatcher:
             raise ValueError("Language applies only to labels.")
         self.normalize = normalize
         self._index: dict[Any, AbstractBaseCustomValue] = {}
+        self._ambiguous: set[Any] = set()
         for choice in choices:
             key = self._key(getattr(choice, attribute))
+            if key in (None, ""):
+                continue
             try:
                 if key in self._index:
-                    raise ChoiceMatchError(
-                        "More than one choice matches.", code="ambiguous"
-                    )
+                    self._ambiguous.add(key)
                 self._index[key] = choice
             except TypeError:
                 raise ChoiceMatchError(
@@ -53,6 +54,10 @@ class ChoiceMatcher:
     def resolve(self, token: Any) -> AbstractBaseCustomValue:
         key = self._key(token)
         try:
+            if key in self._ambiguous:
+                raise ChoiceMatchError(
+                    "More than one choice matches.", code="ambiguous"
+                )
             return self._index[key]
         except TypeError:
             raise ChoiceMatchError("Unhashable token.", code="type_mismatch") from None
