@@ -120,3 +120,44 @@ poetry config pypi-token.pypi <token>
 ```
 
 The `version` attribute in the `pyproject.toml` file should be updated to the new version before running the release command, because this version will be published to PyPI.
+
+## Custom-field upgrade
+
+`AbstractBaseCustomValue` adds the optional, untranslated `external_label` field.
+Every concrete subclass needs an `AddField` migration. Apply consumer migrations
+before starting application workers with the upgraded package; do not add this
+field to modeltranslation.
+
+If non-empty external labels must be unique within a field, add this constraint
+to the concrete value model's `Meta.constraints` before generating migrations,
+using a unique constraint name:
+
+```python
+from django.db import models
+
+models.UniqueConstraint(
+    fields=["field", "external_label"],
+    condition=~models.Q(external_label=""),
+    name="custom_value_field_external_label_unique",
+)
+```
+
+## Matching choices
+
+For a choice field `field`, match `external_token` against its exact German label
+(`de` must be a configured translation language):
+
+```python
+from django_features.custom_fields.matching import ChoiceMatcher
+
+matcher = ChoiceMatcher(field.choices, attribute="label", language="de")
+choice = matcher.resolve(external_token)
+```
+
+Use `attribute="value"` or `attribute="external_label"` without `language` for
+untranslated matching. When loading several fields, use the custom-field
+queryset's `with_choices()` to prefetch their choices.
+
+Matching skips `None` and empty-string keys after normalization. Duplicate keys
+raise an ambiguous-match validation error only when resolved; unique keys remain
+matchable. Empty or unknown keys raise a missing-match validation error.
