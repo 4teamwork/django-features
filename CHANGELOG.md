@@ -1,4 +1,24 @@
 
+2026.5.0 (2026-09-23)
+---------------------
+
+New features:
+
+- Every concrete custom-value model requires an `AddField` migration for the new, untranslated `external_label` field; see the [README upgrade guide](README.md#custom-field-upgrade). Add `ChoiceMatcher` for exact matching of external tokens against a choice's label, value or external label.
+
+
+Bug fixes:
+
+- Custom-field validation and defaults:
+
+  - Defaults are only applied on create. Full updates preserve stored values for omitted fields.
+  - Falsy defaults (`0`, `False`, `""`, `[]`) are now applied.
+  - Invalid defaults are rejected in model/admin validation and ignored at runtime with a log warning.
+  - Invalid choice input returns validation errors instead of server errors.
+  - The metadata endpoint now also returns `required`, `allow_null`, `allow_blank`, and the stored `default`.
+  - Removed `ChoiceIdField.get_queryset`.
+
+
 2026.4.0 (2026-08-17)
 ---------------------
 
