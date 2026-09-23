@@ -32,6 +32,10 @@ class CustomFieldSerializer(serializers.ModelSerializer):
     class Meta:
         model = get_custom_field_model()
         fields = [
+            "required",
+            "allow_null",
+            "allow_blank",
+            "default",
             "choice_field",
             "choices",
             "created",
@@ -89,6 +93,7 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         self.write_only_serializer = kwargs.get(
             "write_only_serializer", self._write_only_serializer
         )
+        self._supplied_custom_fields = kwargs.pop("custom_fields", None)
         super().__init__(instance, data, **kwargs)
 
     @property
@@ -110,10 +115,17 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
         if self.exclude_custom_fields:
             return fields
         self._custom_fields = []
-        custom_fields = list(
-            get_custom_field_model().objects.for_model(self.model).filter(**self.filter)
-        )
+        custom_fields = self._supplied_custom_fields
+        if custom_fields is None:
+            custom_fields = (
+                get_custom_field_model()
+                .objects.for_model(self.model)
+                .filter(**self.filter)
+            )
         for field in custom_fields:
+            serialized_field = field.serializer_field
+            if field.choice_field:
+                serialized_field.set_unique_field(self._unique_choice_field)
             self._custom_fields.append(
                 CustomFieldData(
                     field.id,
@@ -121,12 +133,9 @@ class CustomFieldBaseModelSerializer(serializers.ModelSerializer):
                     field.choices,
                     field.choice_field,
                     field.multiple,
-                    field.serializer_field,
+                    serialized_field,
                 )
             )
-            serialized_field = field.serializer_field
-            if field.choice_field:
-                serialized_field.set_unique_field(self._unique_choice_field)
             fields[field.identifier] = serialized_field
         return fields
 

@@ -1,0 +1,8 @@
+Custom-field validation and defaults:
+
+- Defaults are only applied on create. Full updates preserve stored values for omitted fields.
+- Falsy defaults (`0`, `False`, `""`, `[]`) are now applied.
+- Invalid defaults are rejected in model/admin validation and ignored at runtime with a log warning.
+- Invalid choice input returns validation errors instead of server errors.
+- The metadata endpoint now also returns `required`, `allow_null`, `allow_blank`, and the stored `default`.
+- Removed `ChoiceIdField.get_queryset`.
