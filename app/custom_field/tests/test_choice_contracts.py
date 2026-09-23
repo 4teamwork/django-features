@@ -236,7 +236,7 @@ def test_matching_explicit_language_and_untranslated_metadata(
         value="token",
         label_de="Rot",
         label_fr="Rouge",
-        external_label="external",
+        external_key="external",
     )
     with django_assert_num_queries(0), override("fr"):
         assert (
@@ -249,17 +249,18 @@ def test_matching_explicit_language_and_untranslated_metadata(
         )
         assert ChoiceMatcher([choice], attribute="value").resolve("token") is choice
         assert (
-            ChoiceMatcher([choice], attribute="external_label").resolve("external")
+            ChoiceMatcher([choice], attribute="external_key").resolve("external")
             is choice
         )
         with pytest.raises(ChoiceMatchError) as error:
             ChoiceMatcher([choice], attribute="label", language="en").resolve("Rot")
         assert error.value.get_codes() == ["missing"]
     choice.refresh_from_db()
-    assert choice.external_label == "external"
+    assert choice.external_key == "external"
+    assert ChoiceMatcher([choice]).resolve("external") is choice
     assert choice.value == "token"
     assert not any(
-        field.name.startswith("external_label_") for field in CustomValue._meta.fields
+        field.name.startswith("external_key_") for field in CustomValue._meta.fields
     )
 
 
@@ -467,15 +468,15 @@ def test_standard_reverse_prefetch_is_reused(django_assert_num_queries: Any) -> 
         assert loaded.serializer_field.run_validation(choice.id) == choice
 
 
-def test_external_label_unique_only_within_field_and_nonblank() -> None:
+def test_external_key_unique_only_within_field_and_nonblank() -> None:
     field = CustomFieldFactory(choice_field=True)
-    CustomValueFactory(field=field, external_label="")
-    CustomValueFactory(field=field, external_label="")
-    CustomValueFactory(field=field, external_label="token")
+    CustomValueFactory(field=field, external_key="")
+    CustomValueFactory(field=field, external_key="")
+    CustomValueFactory(field=field, external_key="token")
     other = CustomFieldFactory(identifier="other", choice_field=True)
-    CustomValueFactory(field=other, external_label="token")
+    CustomValueFactory(field=other, external_key="token")
     with pytest.raises(IntegrityError), transaction.atomic():
-        CustomValueFactory(field=field, external_label="token")
+        CustomValueFactory(field=field, external_key="token")
 
 
 @pytest.mark.parametrize("multiple", [False, True])
@@ -639,7 +640,7 @@ def test_concrete_datetime_lookup_accepts_native_values() -> None:
 @pytest.mark.parametrize(
     "attribute,language,empty_key",
     [
-        ("external_label", None, ""),
+        ("external_key", None, ""),
         ("label", "de", None),
         ("label", "de", ""),
         ("value", None, None),

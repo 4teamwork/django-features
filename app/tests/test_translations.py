@@ -15,6 +15,12 @@ from django.utils.translation import override
         ),
         (
             "django_features.custom_fields",
+            "Externer Schlüssel",
+            "External key",
+            "Clé externe",
+        ),
+        (
+            "django_features.custom_fields",
             "Eine Option darf nur einmal ausgewählt werden.",
             "A choice may only be selected once.",
             "Une option ne peut être sélectionnée qu'une seule fois.",

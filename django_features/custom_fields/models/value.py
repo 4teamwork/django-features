@@ -24,8 +24,8 @@ class CustomValueQuerySet(models.QuerySet):
 
 
 class AbstractBaseCustomValue(TimeStampedModel):
-    external_label = models.CharField(
-        verbose_name=_("Externe Bezeichnung"), max_length=255, blank=True, default=""
+    external_key = models.CharField(
+        verbose_name=_("Externer Schlüssel"), max_length=255, blank=True, default=""
     )
     order = models.PositiveIntegerField(_("Reihenfolge"), default=0)
     label = models.CharField(verbose_name=_("Label"), null=True, blank=True)

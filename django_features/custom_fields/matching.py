@@ -1,4 +1,4 @@
-"""Request-local, exact matching of an explicitly selected choice attribute."""
+"""Request-local, exact matching of a choice attribute (default: external_key)."""
 
 from collections.abc import Callable
 from collections.abc import Iterable
@@ -20,11 +20,11 @@ class ChoiceMatcher:
         self,
         choices: Iterable[AbstractBaseCustomValue],
         *,
-        attribute: str,
+        attribute: str = "external_key",
         language: str | None = None,
         normalize: Callable[[Any], Any] | None = None,
     ) -> None:
-        if attribute not in ("label", "value", "external_label"):
+        if attribute not in ("label", "value", "external_key"):
             raise ValueError("Unsupported matching attribute.")
         if attribute == "label":
             if language not in AVAILABLE_LANGUAGES:

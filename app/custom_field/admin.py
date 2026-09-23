@@ -26,11 +26,11 @@ class CustomFieldAdmin(BaseAdmin, CustomFieldBaseAdmin, TranslationAdmin):
 
 @admin.register(models.CustomValue)
 class ValueAdmin(BaseAdmin, TranslationAdmin):
-    list_display = ["id", "__str__", "external_label"]
+    list_display = ["id", "__str__", "external_key"]
     search_fields = (
         "label",
         "value",
-        "external_label",
+        "external_key",
         "field__label",
         "field__identifier",
     )
