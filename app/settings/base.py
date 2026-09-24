@@ -25,6 +25,7 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
             "django_linear_migrations",
             "constance",
             "rest_framework",
+            "django_features",
             "django_features.custom_fields",
             "django_features.system_message",
             "app.custom_field",
@@ -62,9 +63,6 @@ class Base(BaseConfiguration, SystemMessageConfigurationMixin):
         ("de", _("Deutsch")),
         ("en", _("Englisch")),
         ("fr", _("Französisch")),
-    ]
-    LOCALE_PATHS = [
-        BASE_DIR / "django_features" / "locale",
     ]
 
     DATABASE_NAME = values.Value("django_features")

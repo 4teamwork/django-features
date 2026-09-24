@@ -1,0 +1,146 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-features\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2025-09-3 11:46+0100\n"
+"Last-Translator: Joel Christinet <joel.christinet@fabasoft.com>\n"
+"Language-Team: Fabasoft Schweiz AG\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: django_features/custom_fields/fields.py
+msgid "Für eine Mehrfachauswahl wird eine Liste erwartet, für eine Einfachauswahl ein einzelner Wert."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Ungültiger Suchwert für die Auswahl."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Eine ausgewählte Option existiert nicht in diesem Feld."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Eine Option darf nur einmal ausgewählt werden."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Mehrere Optionen entsprechen dem Suchwert."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Diese Liste darf nicht leer sein."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Dieses Feld darf nicht leer sein."
+msgstr ""
+
+#: django_features/custom_fields/fields.py
+msgid "Dieses Feld ist kein Auswahlfeld."
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Text (einzeilig)"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Text (mehrzeilig)"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Datum"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Datum und Zeit"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Zahl (Ganzzahl)"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Checkbox"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Leeren String erlauben"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Leere Werte erlauben"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Auswahlfeld"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Standardwert"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Editierbar"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Externer Key"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Feldtyp"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Ausblenden"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Als Filter anbieten"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Name"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Liste"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+#: django_features/custom_fields/models/value.py
+msgid "Reihenfolge"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Erforderlich"
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Wählen Sie einen unterstützten Feldtyp."
+msgstr ""
+
+#: django_features/custom_fields/models/field.py
+msgid "Der Standardwert entspricht nicht den Feldregeln."
+msgstr ""
+
+#: django_features/custom_fields/models/value.py
+msgid "Externe Bezeichnung"
+msgstr ""
+
+#: django_features/custom_fields/models/value.py
+msgid "Label"
+msgstr "Bezeichnung"
+
+#: django_features/custom_fields/models/value.py
+msgid "Wert"
+msgstr ""
