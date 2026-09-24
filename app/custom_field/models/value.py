@@ -16,9 +16,9 @@ class CustomValue(AbstractBaseCustomValue):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["field", "external_label"],
-                condition=~models.Q(external_label=""),
-                name="custom_value_field_external_label_unique",
+                fields=["field", "external_key"],
+                condition=~models.Q(external_key=""),
+                name="custom_value_field_external_key_unique",
             )
         ]
         ordering = ["order", "created"]

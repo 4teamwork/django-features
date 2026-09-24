@@ -154,12 +154,17 @@ The `version` attribute in the `pyproject.toml` file should be updated to the ne
 
 ## Custom-field upgrade
 
-`AbstractBaseCustomValue` adds the optional, untranslated `external_label` field.
-Every concrete subclass needs an `AddField` migration. Apply consumer migrations
-before starting application workers with the upgraded package; do not add this
-field to modeltranslation.
+`AbstractBaseCustomValue` provides the optional, untranslated `external_key` field.
+It stores the stable token supplied by the external system, independently of the
+display label and application value. It replaces `external_label` from 2026.5.0.
+Every concrete subclass upgrading from that release needs a `RenameField`
+migration, plus removal and recreation of any constraint that names the old field.
+The example app's `0003_rename_external_choice_key` demonstrates a reversible
+upgrade that preserves existing keys and values. New consumers need an `AddField`
+migration. Apply consumer migrations before starting application workers with the
+upgraded package; do not add this field to modeltranslation.
 
-If non-empty external labels must be unique within a field, add this constraint
+If non-empty external keys must be unique within a field, add this constraint
 to the concrete value model's `Meta.constraints` before generating migrations,
 using a unique constraint name:
 
@@ -167,26 +172,26 @@ using a unique constraint name:
 from django.db import models
 
 models.UniqueConstraint(
-    fields=["field", "external_label"],
-    condition=~models.Q(external_label=""),
-    name="custom_value_field_external_label_unique",
+    fields=["field", "external_key"],
+    condition=~models.Q(external_key=""),
+    name="custom_value_field_external_key_unique",
 )
 ```
 
 ## Matching choices
 
-For a choice field `field`, match `external_token` against its exact German label
-(`de` must be a configured translation language):
+For a choice field `field`, match the external system's token directly against
+the choice's exact `external_key`, without language or matching configuration:
 
 ```python
 from django_features.custom_fields.matching import ChoiceMatcher
 
-matcher = ChoiceMatcher(field.choices, attribute="label", language="de")
+matcher = ChoiceMatcher(field.choices)
 choice = matcher.resolve(external_token)
 ```
 
-Use `attribute="value"` or `attribute="external_label"` without `language` for
-untranslated matching. When loading several fields, use the custom-field
+Generic callers can still use `attribute="value"`, or `attribute="label"` with
+an explicit configured `language`. When loading several fields, use the custom-field
 queryset's `with_choices()` to prefetch their choices.
 
 Matching skips `None` and empty-string keys after normalization. Duplicate keys

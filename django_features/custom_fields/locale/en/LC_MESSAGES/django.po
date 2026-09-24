@@ -134,8 +134,8 @@ msgid "Der Standardwert entspricht nicht den Feldregeln."
 msgstr "The default does not satisfy the field rules."
 
 #: django_features/custom_fields/models/value.py
-msgid "Externe Bezeichnung"
-msgstr ""
+msgid "Externer Schlüssel"
+msgstr "External key"
 
 #: django_features/custom_fields/models/value.py
 msgid "Label"
