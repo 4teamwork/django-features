@@ -19,6 +19,20 @@ django_features.system_message
 django_features.custom_fields
 ```
 
+Each app includes its own translation catalogs, which Django discovers through
+`INSTALLED_APPS`. No package-specific `LOCALE_PATHS` entry is needed.
+
+If you use the shared serializer fields in `django_features.fields`, also add
+`django_features` to `INSTALLED_APPS` to load their translations. The two feature
+apps do not require this root app.
+
+Django merges installed apps' translation catalogs; translations are not scoped
+to the app that provides them. In German, the custom-fields catalog translates
+the context-free message `Label` as `Bezeichnung`, which can also affect the same
+message in other apps. To override it, provide a translation in a project catalog
+in `LOCALE_PATHS` or in an app listed before `django_features.custom_fields` in
+`INSTALLED_APPS`.
+
 # Configuration
 
 If you want to use `django_features`, your base configuration class should inherit from `django_features.settings.BaseConfiguration`.
@@ -100,6 +114,23 @@ Installing dependencies, assuming you have poetry installed:
 ``` bash
 poetry install
 ```
+
+## Translations
+
+Catalogs live in each feature app's `locale/` directory. Shared serializer-field
+messages remain in `django_features/locale/`, and demo-only messages live in
+`app/locale/`. Keep translations of messages shared between apps consistent.
+
+From the repository root, update the catalogs with:
+
+```bash
+poetry run ./bin/i18n_update
+```
+
+This requires GNU gettext. Edit the German, English, and French `.po` files as
+needed, then run the command again to compile them. Commit both `.po` and `.mo`
+files; the compiled package catalogs are included in the distribution so consumers
+do not need to run `compilemessages`.
 
 # Release
 
