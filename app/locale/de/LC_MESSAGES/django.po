@@ -16,10 +16,34 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: django_features/fields.py
-msgid "Objekt existiert nicht."
+#: app/custom_field/models/base.py app/custom_field/models/value.py
+msgid "Benutzerdefinierte Werte"
 msgstr ""
 
-#: django_features/fields.py
-msgid "Inkorrekter Typ."
+#: app/custom_field/models/field.py
+msgid "Benutzerdefiniertes Feld"
+msgstr ""
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefinierte Felder"
+msgstr ""
+
+#: app/custom_field/models/value.py
+msgid "Feld"
+msgstr ""
+
+#: app/custom_field/models/value.py
+msgid "Benutzerdefinierter Wert"
+msgstr ""
+
+#: app/settings/base.py
+msgid "Deutsch"
+msgstr ""
+
+#: app/settings/base.py
+msgid "Englisch"
+msgstr ""
+
+#: app/settings/base.py
+msgid "Französisch"
 msgstr ""

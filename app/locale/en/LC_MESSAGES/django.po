@@ -1,0 +1,49 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-features\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2025-09-3 11:46+0100\n"
+"Last-Translator: Joel Christinet <joel.christinet@fabasoft.com>\n"
+"Language-Team: Fabasoft Schweiz AG\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: app/custom_field/models/base.py app/custom_field/models/value.py
+msgid "Benutzerdefinierte Werte"
+msgstr "Custom values"
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefiniertes Feld"
+msgstr "Custom field"
+
+#: app/custom_field/models/field.py
+msgid "Benutzerdefinierte Felder"
+msgstr "Custom fields"
+
+#: app/custom_field/models/value.py
+msgid "Feld"
+msgstr "Field"
+
+#: app/custom_field/models/value.py
+msgid "Benutzerdefinierter Wert"
+msgstr "Custom value"
+
+#: app/settings/base.py
+msgid "Deutsch"
+msgstr "German"
+
+#: app/settings/base.py
+msgid "Englisch"
+msgstr "English"
+
+#: app/settings/base.py
+msgid "Französisch"
+msgstr "France"
