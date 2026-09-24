@@ -1,1 +1,0 @@
-Rename the untranslated custom-value external_label field to external_key. Consumers must rename the column and recreate field-scoped uniqueness constraints before starting upgraded workers. ChoiceMatcher accepts external_key for exact external token matching.

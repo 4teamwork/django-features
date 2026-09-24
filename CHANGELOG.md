@@ -1,4 +1,19 @@
 
+2026.5.1 (2026-09-24)
+---------------------
+
+New features:
+
+- Rename the untranslated custom-value external_label field to external_key. Consumers must rename the column and recreate field-scoped uniqueness constraints before starting upgraded workers. ChoiceMatcher accepts external_key for exact external token matching.
+
+
+Bug fixes:
+
+- Fix translation discovery for independently installed `django_features.custom_fields` and `django_features.system_message` apps. German, English, and French catalogs are now bundled with each feature app and loaded through `INSTALLED_APPS`, without a package-specific `LOCALE_PATHS` entry or a consumer-side `compilemessages` step. Users of the shared serializer fields in `django_features.fields` should also add `django_features` to `INSTALLED_APPS` for their translations.
+
+  Django merges app catalogs, so translations can affect matching messages in other installed apps. In particular, installing `django_features.custom_fields` can make `Label` appear as `Bezeichnung` in German wherever the same context-free message is used. A project catalog in `LOCALE_PATHS`, or an app listed earlier in `INSTALLED_APPS`, can override this translation.
+
+
 2026.5.0 (2026-09-23)
 ---------------------
 
